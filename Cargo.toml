@@ -1,0 +1,12 @@
+[package]
+name = "genericbot-rs"
+version = "0.1.0"
+authors = ["Ben Simms <ben@bensimms.moe>"]
+
+[dependencies]
+serenity = "0.5"
+diesel = { version = "1.1.1", features = ["postgres"] }
+dotenv = "0.11"
+chrono = "0.4"
+typemap = "0.3.3"
+threadpool = "1.7.1"
