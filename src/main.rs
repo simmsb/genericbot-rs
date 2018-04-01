@@ -1,5 +1,7 @@
 pub mod schema;
 pub mod models;
+#[macro_use]
+pub mod utils;
 
 mod commands;
 
@@ -102,12 +104,11 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<Vec<String>>> {
     drop(data);
 
     if let Some(g_id) = m.guild_id() {
-        let prefixes = prefix.filter(guild_id.eq(g_id.0 as i64))
-            .load::<Prefix>(pool)
-            .expect("Error loading prefixes")
-            .into_iter()
-            .map(|p| p.pre)
-            .collect();
+        let prefixes = prefix
+            .filter(guild_id.eq(g_id.0 as i64))
+            .select(pre)
+            .load::<String>(pool)
+            .expect("Error loading prefixes");
         Some(Arc::new(prefixes))
     } else {
         None
@@ -115,56 +116,68 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<Vec<String>>> {
 }
 
 // Our setup stuff
-fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
+fn setup(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
     use serenity::framework::standard::{
         DispatchError::*,
         help_commands,
         HelpBehaviour,
     };
 
-    frame.on_dispatch_error(| _, msg, err | {
-        if let Some(s) = match err {
-            OnlyForGuilds =>
-                Some("This command can only be used in private messages.".to_string()),
-            NotEnoughArguments { min, given } =>
-                Some(format!("Command missing required arguments, given: {} but needs {}.", given, min)),
-            TooManyArguments {max, given} =>
-                Some(format!("Command given too many arguments, given: {} but takes at most {}.", given, max)),
-            RateLimited(time) =>
-                Some(format!("You are ratelimited, try again in: {} seconds.", time)),
-            CheckFailed =>
-                Some("The check for this command failed.".to_string()),
-            LackOfPermissions(perms) =>
-                Some(format!("This command requires permissions: {:?}", perms)),
-            _ => None,
-        } {
+    use std::collections::HashSet;
+
+    let owners = match serenity::http::get_current_application_info() {
+        Ok(info) => {
+            let mut set = HashSet::new();
+            set.insert(info.owner.id);
+            set
+        },
+        Err(why) => panic!("Couldn't retrieve app info: {:?}", why),
+    };
+
+    frame
+        .on_dispatch_error(| _, msg, err | {
+            println!("handling error: {:?}", err);
+            let s = match err {
+                OnlyForGuilds =>
+                    "This command can only be used in private messages.".to_string(),
+                RateLimited(time) =>
+                    format!("You are ratelimited, try again in: {} seconds.", time),
+                CheckFailed =>
+                    "The check for this command failed.".to_string(),
+                LackOfPermissions(perms) =>
+                    format!("This command requires permissions: {:?}", perms),
+                _ => return,
+            };
             let _ = msg.channel_id.say(&s);
-        }})
+        })
          .after(| ctx, msg, _, err | {
              use schema::guild::dsl::*;
 
-             if let Some(g_id) = msg.guild_id() {
-                if !err.is_err() {
-                    let data = ctx.data.lock();
-                    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-                    drop(data);
+             match err {
+                 Ok(_) => {
+                     if let Some(g_id) = msg.guild_id() {
+                         let data = ctx.data.lock();
+                         let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+                         drop(data);
 
-                    diesel::update(guild.find(g_id.0 as i64))
-                        .set(commands_from.eq(commands_from + 1))
-                        .execute(pool)
-                        .unwrap();
-
-                }
+                         diesel::update(guild.find(g_id.0 as i64))
+                             .set(commands_from.eq(commands_from + 1))
+                             .execute(pool)
+                             .unwrap();
+                     }
+                 }
+                 Err(e) => { let _ = msg.channel_id.say(e.0); },
              }
          })
         .configure(|c| c
                    .dynamic_prefixes(get_prefixes)
-                   .prefix("#!"))
+                   .prefix("--")
+                   .owners(owners))
         .customised_help(help_commands::plain, |c| c
                          .individual_command_tip(
                              "To get help on a specific command, pass the command name as an argument to help.")
                          .command_not_found_text("A command with the name {} does not exist.")
-                         .suggestion_text("This command was not, maybe you meant: {}?")
+                         .suggestion_text("This command was not found, maybe you meant: {}?")
                          .lacking_permissions(HelpBehaviour::Hide))
 }
 
@@ -193,7 +206,6 @@ fn main() {
     let framework = setup_fns.iter().fold(
         StandardFramework::new(),
         | acc, fun | fun(&mut client, acc));
-
 
     client.with_framework(framework);
 

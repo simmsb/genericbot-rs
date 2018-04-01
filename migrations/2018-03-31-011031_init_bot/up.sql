@@ -35,7 +35,8 @@ CREATE TABLE tag (
        author_id BIGINT NOT NULL,
        guild_id BIGINT NOT NULL REFERENCES guild (id),
        "key" VARCHAR(2000) NOT NULL,
-       text VARCHAR(2000) NOT NULL
+       text VARCHAR(2000) NOT NULL,
+       UNIQUE (guild_id, "key")
 );
 
 CREATE INDEX ON "message" ("guild_id", "user_id");
