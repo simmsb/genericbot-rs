@@ -23,7 +23,6 @@ pub struct NewStoredMessage<'a> {
 #[table_name="prefix"]
 #[derive(Insertable)]
 pub struct NewPrefix<'a> {
-    pub id: i64,
     pub guild_id: i64,
     pub pre: &'a str,
 }
@@ -31,7 +30,6 @@ pub struct NewPrefix<'a> {
 #[table_name="reminder"]
 #[derive(Insertable)]
 pub struct NewReminder<'a> {
-    pub id: i64,
     pub user_id: i64,
     pub channel_id: i64,
     pub text: &'a str,
@@ -42,7 +40,6 @@ pub struct NewReminder<'a> {
 #[table_name="tag"]
 #[derive(Insertable)]
 pub struct NewTag<'a> {
-    pub id: i64,
     pub author_id: i64,
     pub guild_id: i64,
     pub key: &'a str,

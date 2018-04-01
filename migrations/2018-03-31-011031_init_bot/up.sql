@@ -16,7 +16,8 @@ CREATE TABLE message (
 CREATE TABLE "prefix" (
        id BIGSERIAL PRIMARY KEY,
        guild_id BIGINT NOT NULL REFERENCES guild (id),
-       pre VARCHAR(2000) NOT NULL
+       pre VARCHAR(2000) NOT NULL,
+       UNIQUE (guild_id, pre)
 );
 
 
