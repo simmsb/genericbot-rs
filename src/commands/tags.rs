@@ -1,26 +1,28 @@
 use serenity::{
     prelude::*,
-    model::channel::Message,
+    model::{
+        channel::Message,
+        permissions::Permissions,
+    },
     framework::standard::{
         StandardFramework,
         CommandError,
     },
+    utils::{
+        with_cache,
+        MessageBuilder,
+    },
 };
-use serenity;
 use diesel::prelude::*;
 use diesel;
 use ::PgConnectionManager;
 use models::Tag;
 
-#[macro_use]
-use utils::macros::*;
 
 fn get_tag(ctx: &Context, g_id: i64, tag_key: &String) -> QueryResult<Tag> {
     use schema::tag::dsl::*;
 
-    let data = ctx.data.lock();
-    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-    drop(data);
+    let pool = extract_pool!(&ctx);
 
     tag.filter(guild_id.eq(&g_id))
        .filter(key.eq(tag_key))
@@ -28,7 +30,7 @@ fn get_tag(ctx: &Context, g_id: i64, tag_key: &String) -> QueryResult<Tag> {
 }
 
 
-fn insert_tag(ctx: &Context, msg: &Message, key: &String, content: &String) -> Tag {
+fn insert_tag(ctx: &Context, msg: &Message, key: &String, content: &str) {
     use schema::tag;
     use models::NewTag;
 
@@ -39,23 +41,19 @@ fn insert_tag(ctx: &Context, msg: &Message, key: &String, content: &String) -> T
         text: content,
     };
 
-    let data = ctx.data.lock();
-    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-    drop(data);
+    let pool = extract_pool!(&ctx);
 
     diesel::insert_into(tag::table)
         .values(&new_tag)
-        .get_result(pool)
-        .expect("Couldn't save posts")
+        .execute(pool)
+        .expect("Couldn't save posts");
 }
 
 
 fn delete_tag_do(ctx: &Context, tag_id: i64) {
     use schema::tag::dsl::*;
 
-    let data = ctx.data.lock();
-    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-    drop(data);
+    let pool = extract_pool!(&ctx);
 
     diesel::delete(tag.filter(id.eq(tag_id))).execute(pool).unwrap();
 }
@@ -64,9 +62,7 @@ fn delete_tag_do(ctx: &Context, tag_id: i64) {
 fn get_tags_range(ctx: &Context, g_id: i64, page: i64) -> QueryResult<Vec<Tag>> {
     use schema::tag::dsl::*;
 
-    let data = ctx.data.lock();
-    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-    drop(data);
+    let pool = extract_pool!(&ctx);
 
     let start = page * 20;
     tag.filter(guild_id.eq(&g_id))
@@ -80,9 +76,7 @@ fn get_tags_range(ctx: &Context, g_id: i64, page: i64) -> QueryResult<Vec<Tag>> 
 fn get_tag_count(ctx: &Context, g_id: i64) -> QueryResult<i64> {
     use schema::tag::dsl::*;
 
-    let data = ctx.data.lock();
-    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-    drop(data);
+    let pool = extract_pool!(&ctx);
 
     tag.filter(guild_id.eq(&g_id))
        .count()
@@ -90,9 +84,22 @@ fn get_tag_count(ctx: &Context, g_id: i64) -> QueryResult<i64> {
 }
 
 
+fn set_auto_tags(ctx: &Context, g_id: i64, value: bool) {
+    use schema::guild::dsl::*;
+
+    let pool = extract_pool!(&ctx);
+
+    diesel::update(guild.find(&g_id))
+        .set(tag_prefix_on.eq(value))
+        .execute(pool)
+        .unwrap();
+}
+
+
 command!(add_tag(ctx, msg, args) {
     let key = get_arg!(args, single_quoted, String, key);
-    let value = get_arg!(args, multiple, String, key).join(" ");
+    let value = args.full();
+    // let value = get_arg!(args, full, String, value).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
         msg.channel_id.say(format!("The tag: {} already exists", t.key))?;
@@ -117,25 +124,16 @@ command!(tag(ctx, msg, args) {
 
 
 command!(delete_tag(ctx, msg, args) {
-    use serenity::CACHE;
-
     let key = get_arg!(args, multiple, String, key).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
 
-        let cache = CACHE.read();
-        let has_manage_messages = {
-            // TODO: refactor, use guild.member_permissions instead of getting the member
-            if let Some(guild) = cache.guild(msg.guild_id().unwrap()) {
-                if let Some(member) = guild.read().members.get(&msg.author.id) {
-                    member.permissions().ok().map_or(false, |p| p.manage_messages())
-                } else {  // AAAAAAAA
-                    false
-                }
-            } else {
-                false
-            }
-        };
+        let has_manage_messages = with_cache(
+            |cache| cache.guild(msg.guild_id().unwrap()).map_or(
+                false,
+                |g| g.read().member_permissions(msg.author.id).manage_messages()
+            )
+        );
 
         if has_manage_messages || (t.author_id as u64 == msg.author.id.0) {
             delete_tag_do(&ctx, t.id);
@@ -150,7 +148,6 @@ command!(delete_tag(ctx, msg, args) {
 
 
 command!(list_tags(ctx, msg, args) {
-    use serenity::utils::{with_cache, MessageBuilder};
     use std::cmp;
 
     let page = args.single::<i64>().unwrap_or(1) - 1;
@@ -172,28 +169,23 @@ command!(list_tags(ctx, msg, args) {
 
     let user_ids: Vec<i64> = tag_list.iter().map(|t| t.author_id).collect();
 
-    let user_names: Vec<String> = match with_cache( // AAAAAAAAAAAAAAAAa
+    let user_names: Vec<String> = with_cache( // AAAAAAAAAAAAAAAAa
         |cache| cache.guild(msg.guild_id().unwrap()).map(|g| {
             let members = &g.read().members;
             user_ids.iter().map(
                 |&id| members.get(&From::from(id as u64)).map_or_else(
-                    || id.to_string(),
+                    || format!("<@{}>", id as u64),
                     |m| m.display_name().to_string()))
-                .collect()
-        })) {
-        Some(x) => x,
-        None    => user_ids.iter().map(|&id| id.to_string()).collect(),
-    };
+                           .collect()
+        })).unwrap_or_else(|| user_ids.iter().map(|&id| id.to_string()).collect());
 
-
-    let tag_content: String = user_names
+    let tag_content = user_names
         .into_iter()
         .zip(tag_list)
         .enumerate().map(
             |(i, (name, tag_v))|
-            format!("{:>3} | {}: {:.50}", i, name, tag_v.key)
-        ).collect::<Vec<String>>().join("\n");
-
+            format!("{:>3} | {}: {}", i, name, tag_v.key)
+        ).fold(String::new(), |acc, a| acc + "\n" + &a);
 
     let content = MessageBuilder::new()
         .push_line(format!("Tags {}-{} of {}", start, cmp::min(last, tag_count), tag_count))
@@ -201,6 +193,18 @@ command!(list_tags(ctx, msg, args) {
         .build();
 
     msg.channel_id.say(content)?;
+});
+
+
+command!(auto_tags_on(ctx, msg) {
+    set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, true);
+    msg.channel_id.say("Enabled automatic tags on this guild.")?;
+});
+
+
+command!(auto_tags_off(ctx, msg) {
+    set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, false);
+    msg.channel_id.say("Disabled automatic tags on this guild.")?;
 });
 
 
@@ -239,6 +243,23 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                         .example("1 -- lists tags on the first page")
                         .usage("{page}")
                         .max_args(1)
+                )
+                .command(
+                    "auto_tags_on", |c| c
+                        .cmd(auto_tags_on)
+                        .desc(concat!(
+                            "By enabling this, you can allow tags to be ",
+                            "used by just saying the prefix followed by the tag. ",
+                            "For example, #!my_tag."))
+                        .required_permissions(Permissions::ADMINISTRATOR)
+                        .num_args(0)
+                )
+                .command(
+                    "auto_tags_off", |c| c
+                        .cmd(auto_tags_off)
+                        .desc("Disables the prefix only tagging that is enabled by the command: 'auto_tags_on'")
+                        .required_permissions(Permissions::ADMINISTRATOR)
+                        .num_args(0)
                 )
     )
 }

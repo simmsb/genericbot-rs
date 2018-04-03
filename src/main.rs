@@ -1,7 +1,10 @@
+#![feature(vec_remove_item)]
+
 pub mod schema;
 pub mod models;
 #[macro_use]
 pub mod utils;
+pub mod background_tasks;
 
 mod commands;
 
@@ -14,7 +17,10 @@ extern crate r2d2;
 extern crate r2d2_diesel;
 extern crate chrono;
 extern crate typemap;
-extern crate threadpool;
+extern crate base64;
+extern crate hyper;
+extern crate hyper_native_tls;
+extern crate regex;
 
 use serenity::{
     CACHE,
@@ -41,18 +47,20 @@ struct Handler;
 
 impl EventHandler for Handler {
     fn ready(&self, _: Context, ready: Ready) {
+        use background_tasks;
+
         if let Some(shard) = ready.shard {
             println!("Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
         }
+
+        background_tasks::background_task();
     }
 
     fn guild_create(&self, ctx: Context, guild: Guild, _: bool) {
         use schema::{guild, prefix};
         use models::{Guild, NewPrefix};
 
-        let data = ctx.data.lock();
-        let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-        drop(data);
+        let pool = extract_pool!(&ctx);
 
         let new_guild = Guild {
             id: guild.id.0 as i64,
@@ -95,13 +103,9 @@ impl Key for PgConnectionManager {
 
 
 fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<Vec<String>>> {
-    use models::Prefix;
     use schema::prefix::dsl::*;
 
-    let data = ctx.data.lock();
-    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-
-    drop(data);
+    let pool = extract_pool!(&ctx);
 
     if let Some(g_id) = m.guild_id() {
         let prefixes = prefix
@@ -156,9 +160,7 @@ fn setup(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
              match err {
                  Ok(_) => {
                      if let Some(g_id) = msg.guild_id() {
-                         let data = ctx.data.lock();
-                         let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-                         drop(data);
+                         let pool = extract_pool!(&ctx);
 
                          diesel::update(guild.find(g_id.0 as i64))
                              .set(commands_from.eq(commands_from + 1))
@@ -177,8 +179,36 @@ fn setup(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
                          .individual_command_tip(
                              "To get help on a specific command, pass the command name as an argument to help.")
                          .command_not_found_text("A command with the name {} does not exist.")
-                         .suggestion_text("This command was not found, maybe you meant: {}?")
+                         .suggestion_text("No command with the name '{}' was found.")
                          .lacking_permissions(HelpBehaviour::Hide))
+        .unrecognised_command(|ctx, msg, cmd_name| {
+            use schema::guild::dsl::*;
+            use schema::tag::dsl::*;
+
+            let pool = extract_pool!(&ctx);
+
+            let g_id = match msg.guild_id() {
+                Some(x) => x.0 as i64,
+                None    => return,
+            };
+
+            let has_auto_tags = guild
+                .find(&g_id)
+                .select(tag_prefix_on)
+                .first(pool)
+                .unwrap_or(false);
+
+            if has_auto_tags {
+                if let Ok(r_tag) = tag
+                    .filter(guild_id.eq(&g_id))
+                    .filter(key.eq(cmd_name))
+                    .select(text)
+                    .first::<String>(pool) {
+                        let _ = msg.channel_id.say(r_tag);
+                }
+            }
+
+        })
 }
 
 
@@ -201,7 +231,10 @@ fn main() {
 
     let mut client = Client::new(&token, Handler).unwrap();
 
-    let setup_fns = &[setup, commands::tags::setup_tags];
+    let setup_fns = &[setup,
+                      commands::tags::setup_tags,
+                      commands::admin::setup_admin,
+                     ];
 
     let framework = setup_fns.iter().fold(
         StandardFramework::new(),

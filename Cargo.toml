@@ -5,10 +5,13 @@ authors = ["Ben Simms <ben@bensimms.moe>"]
 
 [dependencies]
 serenity = { git = "https://github.com/nitros12/serenity", rev = "6f11a095dd78e22068d9c931da8f136eb9e2aa49"}
-diesel = { version = "1.1.1", features = ["postgres"] }
+diesel = { version = "1.1.1", features = ["postgres", "chrono"] }
 dotenv = "0.11"
 chrono = "0.4"
 typemap = "0.3.3"
-threadpool = "1.7.1"
 r2d2-diesel = "1.0.0"
 r2d2 = "0.8.2"
+base64 = "0.9"
+hyper = "0.10"
+hyper-native-tls = "0.2.4"
+regex = "0.2"

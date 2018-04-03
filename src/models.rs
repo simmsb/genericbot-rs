@@ -1,4 +1,4 @@
-use diesel::pg::data_types::{PgTimestamp};
+use chrono::NaiveDateTime;
 use ::schema::*;
 
 #[table_name="guild"]
@@ -17,7 +17,7 @@ pub struct NewStoredMessage<'a> {
     pub guild_id: i64,
     pub user_id: i64,
     pub msg: &'a str,
-    pub created_at: PgTimestamp,
+    pub created_at: &'a NaiveDateTime,
 }
 
 #[table_name="prefix"]
@@ -33,8 +33,8 @@ pub struct NewReminder<'a> {
     pub user_id: i64,
     pub channel_id: i64,
     pub text: &'a str,
-    pub started: PgTimestamp,
-    pub when: PgTimestamp,
+    pub started: &'a NaiveDateTime,
+    pub when: &'a NaiveDateTime,
 }
 
 #[table_name="tag"]
@@ -52,7 +52,7 @@ pub struct StoredMessage {
     pub guild_id: i64,
     pub user_id: i64,
     pub message: String,
-    pub created_at: PgTimestamp,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Queryable)]
@@ -68,8 +68,8 @@ pub struct Reminder {
     pub user_id: i64,
     pub channel_id: i64,
     pub text: String,
-    pub started: PgTimestamp,
-    pub when: PgTimestamp,
+    pub started: NaiveDateTime,
+    pub when: NaiveDateTime,
 }
 
 #[derive(Queryable)]
