@@ -2,17 +2,15 @@
 
 pub mod schema;
 pub mod models;
-#[macro_use]
-pub mod utils;
+#[macro_use] pub mod utils;
 pub mod background_tasks;
 
 mod commands;
 
-#[macro_use]
-extern crate serenity;
+#[macro_use] extern crate serenity;
+#[macro_use] extern crate diesel;
+#[macro_use] extern crate lazy_static;
 extern crate dotenv;
-#[macro_use]
-extern crate diesel;
 extern crate r2d2;
 extern crate r2d2_diesel;
 extern crate chrono;
@@ -234,6 +232,7 @@ fn main() {
     let setup_fns = &[setup,
                       commands::tags::setup_tags,
                       commands::admin::setup_admin,
+                      commands::reminders::setup_reminders,
                      ];
 
     let framework = setup_fns.iter().fold(
