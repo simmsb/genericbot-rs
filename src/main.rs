@@ -19,6 +19,7 @@ extern crate base64;
 extern crate hyper;
 extern crate hyper_native_tls;
 extern crate regex;
+extern crate itertools;
 
 use serenity::{
     CACHE,

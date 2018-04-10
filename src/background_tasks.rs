@@ -109,7 +109,7 @@ fn send_reminder_msg(rem: &Reminder) {
         .user(rem.user_id as u64)
         .push(", ")
         .push(human_timedelta(&diff))
-        .push("ago, you asked me to remind you about: ")
+        .push(" ago, you asked me to remind you about: ")
         .push_safe(&rem.text)
         .build();
 

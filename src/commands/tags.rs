@@ -17,6 +17,7 @@ use diesel::prelude::*;
 use diesel;
 use ::PgConnectionManager;
 use models::Tag;
+use itertools::Itertools;
 
 
 fn get_tag(ctx: &Context, g_id: i64, tag_key: &String) -> QueryResult<Tag> {
@@ -182,10 +183,8 @@ command!(list_tags(ctx, msg, args) {
     let tag_content = user_names
         .into_iter()
         .zip(tag_list)
-        .enumerate().map(
-            |(i, (name, tag_v))|
-            format!("{:>3} | {}: {}", i, name, tag_v.key)
-        ).fold(String::new(), |acc, a| acc + "\n" + &a);
+        .enumerate().map(|(i, (name, tag_v))| format!("{:>3} | {}: {}", i, name, tag_v.key))
+        .join("\n");
 
     let content = MessageBuilder::new()
         .push_line(format!("Tags {}-{} of {}", start, cmp::min(last, tag_count), tag_count))

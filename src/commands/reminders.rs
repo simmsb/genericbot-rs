@@ -20,6 +20,7 @@ use ::PgConnectionManager;
 use models::Reminder;
 use regex::Regex;
 use chrono::{NaiveDateTime, Utc, Datelike, Duration, NaiveDate};
+use itertools::Itertools;
 
 
 // TODO: test this function properly.
@@ -199,6 +200,42 @@ fn insert_reminder(ctx: &Context, u_id: i64, c_id: i64, when: NaiveDateTime, now
 }
 
 
+fn list_reminders(ctx: &Context, u_id: i64) -> QueryResult<Vec<(NaiveDateTime, String)>> {
+    use schema::reminder::dsl::*;
+
+    let pool = extract_pool!(&ctx);
+
+    reminder.filter(user_id.eq(u_id))
+        .order(when)
+        .select((when, text))
+        .load(pool)
+}
+
+
+fn delete_reminder(ctx: &Context, u_id: i64, idx: i64) -> bool {
+    use schema::reminder::dsl::*;
+    use diesel::sql_types::BigInt;
+
+    let pool = extract_pool!(&ctx);
+
+    // row_number() is 1 indexed
+    let amount = diesel::sql_query(r#"
+        DELETE FROM "reminder" WHERE id in (
+            SELECT id FROM (
+                SELECT id, row_number() OVER (ORDER BY "when" ASC) as row_num
+                FROM "reminder" WHERE "user_id" = $1
+            ) AS s WHERE s.row_num = $2)
+   "#)
+        .bind::<BigInt, i64>(u_id)
+        .bind::<BigInt, i64>(idx)
+        .execute(pool);
+
+    println!("{:?}", amount);
+
+    return amount.unwrap_or(0) > 0;
+}
+
+
 pub fn human_timedelta(delta: &Duration) -> String {
     let days = delta.num_days();
     let (years, days) = (days / 365, days % 365);
@@ -242,7 +279,7 @@ pub fn human_timedelta(delta: &Duration) -> String {
 
 
 command!(remind_cmd(ctx, msg, args) {
-    let time = get_arg!(args, single_quoted, String, time);
+    let time = get_arg!(args, single_quoted, String, time).to_lowercase();
     let remind_msg = args.full();
 
     let now = Utc::now().naive_utc();
@@ -258,12 +295,56 @@ command!(remind_cmd(ctx, msg, args) {
 });
 
 
+command!(remind_list(ctx, msg) {
+    let reminders = list_reminders(&ctx, msg.author.id.0 as i64)?;
+
+    let lines = reminders
+        .into_iter()
+        .zip(1..)
+        .map(|((w, t), i)| format!("{:>3} | {} | {}", i, w, t))
+        .join("\n");
+
+    let message = MessageBuilder::new()
+        .push("Reminders for ")
+        .mention(&msg.author)
+        .push_line(": ")
+        .push_codeblock_safe(lines, None);
+
+    msg.channel_id.say(message)?;
+});
+
+
+command!(delete_reminder_cmd(ctx, msg, args) {
+    let index = get_arg!(args, single, usize, index) as i64;
+
+    if delete_reminder(&ctx, msg.author.id.0 as i64, index) {
+        msg.channel_id.say("Deleted that reminder.")?;
+    } else {
+        msg.channel_id.say("That reminder didn't exist.")?;
+    };
+
+});
+
+
 pub fn setup_reminders(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
     frame.group("Reminders",
                 |g| g
                 .command("remind", |c| c
                          .cmd(remind_cmd)
-                         .desc("Create a reminder to remind you of something at a point in time.")
+                         .desc(concat!("Create a reminder to remind you of something at a point in time.",
+                                       "\nYou can specify deltas, days of the week or months and days.",
+                                       "\nFor example: \"Tomorrow\", \"3 hours\", \"july 4th\"."))
                          .example("\"3 hours\" Something")
-                         .usage("{when} {message}")))
+                         .usage("{when} {message}"))
+                .command("reminder_list", |c| c
+                         .cmd(remind_list)
+                         .desc("List your reminders.")
+                         .batch_known_as(&["reminders_list", "list_reminders"])
+                )
+                .command("reminder_delete", |c| c
+                         .cmd(delete_reminder_cmd)
+                         .desc("Delete a reminder by index")
+                         .batch_known_as(&["reminders_delete", "delete_reminder"])
+                )
+    )
 }
