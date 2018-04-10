@@ -44,14 +44,14 @@ use typemap::Key;
 struct Handler;
 
 impl EventHandler for Handler {
-    fn ready(&self, _: Context, ready: Ready) {
+    fn ready(&self, ctx: Context, ready: Ready) {
         use background_tasks;
 
         if let Some(shard) = ready.shard {
             println!("Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
         }
 
-        background_tasks::background_task();
+        background_tasks::background_task(&ctx);
     }
 
     fn guild_create(&self, ctx: Context, guild: Guild, _: bool) {

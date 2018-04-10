@@ -17,7 +17,7 @@ use serenity;
 use diesel::prelude::*;
 use diesel;
 use ::PgConnectionManager;
-use models::Tag;
+use models::Reminder;
 use regex::Regex;
 use chrono::{NaiveDateTime, Utc, Datelike, Duration, NaiveDate};
 
@@ -30,11 +30,12 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<NaiveDateT
             r"(?P<value>\d+)\s*",
             r"(?P<period>",
             r"y(?:ears?)?|",
-            r"m(?:onths?)?|",
+            r"M|",
+            r"months?|",
             r"w(?:eeks?)?|",
             r"d(?:ays?)?|",
             r"h(?:ours?)?|",
-            r"min(?:utes?)?|",
+            r"m(?:inutes?)?|",
             r"s(?:econds?)?)"
         )).unwrap();
 
@@ -75,35 +76,31 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<NaiveDateT
         let val = (&caps["value"]).parse::<u32>()? as i64;
         let per = &caps["period"];
 
-        if per.starts_with("min") { // special case for minutes
-            base_time += Duration::minutes(val);
-            continue
+        if per == "M" || per.starts_with("mon") { // special case for months
+            let yr = base_time.year();
+            let mn = base_time.month0() + (val as u32);
+
+            // muh sign conversions
+            let yr = (yr as u32 + mn / 12) as i32;
+            let mn = mn % 12;
+
+            base_time = base_time
+                .with_year(yr).ok_or("Invalid year value from months.")?
+                .with_month0(mn).ok_or("Invalid month value.")?;
+        } else {
+            base_time = match &per[..1] {
+                "y" => {
+                    let yr = base_time.year() + (val as i32);
+                    base_time.with_year(yr).ok_or("Invalid year value.")?
+                },
+                "w" => base_time + Duration::weeks(val),
+                "d" => base_time + Duration::days(val),
+                "h" => base_time + Duration::hours(val),
+                "m" => base_time + Duration::minutes(val),
+                "s" => base_time + Duration::seconds(val),
+                _   => unreachable!(),
+            };
         }
-
-        base_time = match &per[..1] {
-            "y" => {
-                let yr = base_time.year() + (val as i32);
-                base_time.with_year(yr).ok_or("Invalid year value.")?
-            },
-            "m" => {
-                let yr = base_time.year();
-                let mn = base_time.month0() + (val as u32);
-
-                // muh sign conversions
-                let yr = (yr as u32 + mn / 12) as i32;
-                let mn = mn % 12;
-
-                base_time
-                    .with_year(yr).ok_or("Invalid year value from months.")?
-                    .with_month0(mn).ok_or("Invalid month value.")?
-            },
-            "w" => base_time + Duration::weeks(val),
-            "d" => base_time + Duration::days(val),
-            "h" => base_time + Duration::hours(val),
-            // "m"inutes case covered above
-            "s" => base_time + Duration::seconds(val),
-            _   => unreachable!(),
-        };
         has_parsed_diff = true;
     }
 
@@ -202,7 +199,7 @@ fn insert_reminder(ctx: &Context, u_id: i64, c_id: i64, when: NaiveDateTime, now
 }
 
 
-fn human_timedelta(delta: &Duration) -> String {
+pub fn human_timedelta(delta: &Duration) -> String {
     let days = delta.num_days();
     let (years, days) = (days / 365, days % 365);
     let (weeks, days) = (days / 7, days % 7);
@@ -210,7 +207,6 @@ fn human_timedelta(delta: &Duration) -> String {
     let minutes = delta.num_minutes() % 60;
     let seconds = delta.num_seconds() % 60;
 
-    let mut res = String::new();
     let formats = &[(years, "year"),
                     (weeks, "week"),
                     (days, "day"),
@@ -218,13 +214,26 @@ fn human_timedelta(delta: &Duration) -> String {
                     (minutes, "minute"),
                     (seconds, "second")];
 
-    for &(t, name) in formats {
-        if t == 0 { continue; }
+    let nonzero_count = formats.iter().filter(|&(x, _)| *x != 0).count() as isize;
 
-        res.push_str(&format!(" {} {}", t, name));
+    let mut res = String::new();
+    for (n, &(t, s)) in formats.into_iter()
+                               .filter(|&(x, _)| *x != 0)
+                               .enumerate()
+    {
+        res.push_str(&format!("{} {}", t, s));
 
         if t != 1 {
             res.push_str("s");
+        }
+
+        // nonzero_count will be the largest value n will reach
+        // if n == nonzero - 2, add in 'and'
+        // else if n < nonzero - 2, add in a comma
+        if n as isize == nonzero_count - 2 {
+            res.push_str(" and ")
+        } else if (n as isize) < nonzero_count - 2 {
+            res.push_str(", ")
         }
     }
 
