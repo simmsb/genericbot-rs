@@ -3,11 +3,6 @@ use serenity::{
     prelude::*,
     framework::standard::{
         StandardFramework,
-        CommandError,
-    },
-    utils::{
-        with_cache,
-        MessageBuilder,
     },
 };
 use diesel;

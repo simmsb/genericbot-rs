@@ -1,23 +1,16 @@
 use serenity::{
     prelude::*,
-    model::{
-        channel::Message,
-        permissions::Permissions,
-    },
     framework::standard::{
         StandardFramework,
         CommandError,
     },
     utils::{
-        with_cache,
         MessageBuilder,
     },
 };
-use serenity;
 use diesel::prelude::*;
 use diesel;
 use ::PgConnectionManager;
-use models::Reminder;
 use regex::Regex;
 use chrono::{NaiveDateTime, Utc, Datelike, Duration, NaiveDate};
 use itertools::Itertools;
@@ -200,7 +193,7 @@ fn insert_reminder(ctx: &Context, u_id: i64, c_id: i64, when: NaiveDateTime, now
 }
 
 
-fn list_reminders(ctx: &Context, u_id: i64) -> QueryResult<Vec<(NaiveDateTime, String)>> {
+fn list_reminders(ctx: &Context, u_id: i64) -> Vec<(NaiveDateTime, String)> {
     use schema::reminder::dsl::*;
 
     let pool = extract_pool!(&ctx);
@@ -209,11 +202,11 @@ fn list_reminders(ctx: &Context, u_id: i64) -> QueryResult<Vec<(NaiveDateTime, S
         .order(when)
         .select((when, text))
         .load(pool)
+        .unwrap()
 }
 
 
 fn delete_reminder(ctx: &Context, u_id: i64, idx: i64) -> bool {
-    use schema::reminder::dsl::*;
     use diesel::sql_types::BigInt;
 
     let pool = extract_pool!(&ctx);
@@ -230,9 +223,7 @@ fn delete_reminder(ctx: &Context, u_id: i64, idx: i64) -> bool {
         .bind::<BigInt, i64>(idx)
         .execute(pool);
 
-    println!("{:?}", amount);
-
-    return amount.unwrap_or(0) > 0;
+    return amount.unwrap() > 0;
 }
 
 
@@ -296,7 +287,7 @@ command!(remind_cmd(ctx, msg, args) {
 
 
 command!(remind_list(ctx, msg) {
-    let reminders = list_reminders(&ctx, msg.author.id.0 as i64)?;
+    let reminders = list_reminders(&ctx, msg.author.id.0 as i64);
 
     let lines = reminders
         .into_iter()

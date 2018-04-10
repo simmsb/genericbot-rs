@@ -60,7 +60,7 @@ fn delete_tag_do(ctx: &Context, tag_id: i64) {
 }
 
 
-fn get_tags_range(ctx: &Context, g_id: i64, page: i64) -> QueryResult<Vec<Tag>> {
+fn get_tags_range(ctx: &Context, g_id: i64, page: i64) -> Vec<Tag> {
     use schema::tag::dsl::*;
 
     let pool = extract_pool!(&ctx);
@@ -71,10 +71,11 @@ fn get_tags_range(ctx: &Context, g_id: i64, page: i64) -> QueryResult<Vec<Tag>> 
        .offset(start)
        .limit(20)
        .load(pool)
+       .unwrap()
 }
 
 
-fn get_tag_count(ctx: &Context, g_id: i64) -> QueryResult<i64> {
+fn get_tag_count(ctx: &Context, g_id: i64) -> i64 {
     use schema::tag::dsl::*;
 
     let pool = extract_pool!(&ctx);
@@ -82,6 +83,7 @@ fn get_tag_count(ctx: &Context, g_id: i64) -> QueryResult<i64> {
     tag.filter(guild_id.eq(&g_id))
        .count()
        .get_result(pool)
+       .unwrap()
 }
 
 
@@ -160,8 +162,8 @@ command!(list_tags(ctx, msg, args) {
 
     let start = page * 20;
     let last = (page + 1) * 20 - 1;
-    let tag_list: Vec<Tag> = get_tags_range(&ctx, msg.guild_id().unwrap().0 as i64, page as i64)?;
-    let tag_count = get_tag_count(&ctx, msg.guild_id().unwrap().0 as i64)?;
+    let tag_list: Vec<Tag> = get_tags_range(&ctx, msg.guild_id().unwrap().0 as i64, page as i64);
+    let tag_count = get_tag_count(&ctx, msg.guild_id().unwrap().0 as i64);
 
     if start > tag_count {
         msg.channel_id.say(format!("The requested page ({}) is greater than the number of pages ({}).", page, last / 20))?;
