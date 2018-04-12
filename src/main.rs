@@ -20,6 +20,7 @@ extern crate hyper;
 extern crate hyper_native_tls;
 extern crate regex;
 extern crate itertools;
+extern crate rand;
 
 use serenity::{
     CACHE,
@@ -234,6 +235,7 @@ fn main() {
                       commands::tags::setup_tags,
                       commands::admin::setup_admin,
                       commands::reminders::setup_reminders,
+                      commands::markov::setup_markov,
                      ];
 
     let framework = setup_fns.iter().fold(

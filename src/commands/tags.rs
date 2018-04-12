@@ -152,6 +152,7 @@ command!(delete_tag(ctx, msg, args) {
 
 command!(list_tags(ctx, msg, args) {
     use std::cmp;
+    use utils::names_for_members;
 
     let page = args.single::<i64>().unwrap_or(1) - 1;
 
@@ -170,17 +171,9 @@ command!(list_tags(ctx, msg, args) {
         return Ok(());
     }
 
-    let user_ids: Vec<i64> = tag_list.iter().map(|t| t.author_id).collect();
+    let user_ids: Vec<u64> = tag_list.iter().map(|t| t.author_id as u64).collect();
 
-    let user_names: Vec<String> = with_cache( // AAAAAAAAAAAAAAAAa
-        |cache| cache.guild(msg.guild_id().unwrap()).map(|g| {
-            let members = &g.read().members;
-            user_ids.iter().map(
-                |&id| members.get(&From::from(id as u64)).map_or_else(
-                    || format!("<@{}>", id as u64),
-                    |m| m.display_name().to_string()))
-                           .collect()
-        })).unwrap_or_else(|| user_ids.iter().map(|&id| id.to_string()).collect());
+    let user_names = names_for_members(&user_ids, msg.guild_id().unwrap());
 
     let tag_content = user_names
         .into_iter()

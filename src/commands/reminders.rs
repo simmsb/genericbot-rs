@@ -228,6 +228,8 @@ fn delete_reminder(ctx: &Context, u_id: i64, idx: i64) -> bool {
 
 
 pub fn human_timedelta(delta: &Duration) -> String {
+    use utils::and_comma_split;
+
     let days = delta.num_days();
     let (years, days) = (days / 365, days % 365);
     let (weeks, days) = (days / 7, days % 7);
@@ -242,30 +244,14 @@ pub fn human_timedelta(delta: &Duration) -> String {
                     (minutes, "minute"),
                     (seconds, "second")];
 
-    let nonzero_count = formats.iter().filter(|&(x, _)| *x != 0).count() as isize;
+    let parts: Vec<_> = formats.into_iter()
+        .filter(|&(x, _)| *x != 0)
+        .map(|&(t, s)| {
+            format!("{} {}", t, s) + (if t != 1 { "s" } else { "" })
+        })
+        .collect();
 
-    let mut res = String::new();
-    for (n, &(t, s)) in formats.into_iter()
-                               .filter(|&(x, _)| *x != 0)
-                               .enumerate()
-    {
-        res.push_str(&format!("{} {}", t, s));
-
-        if t != 1 {
-            res.push_str("s");
-        }
-
-        // nonzero_count will be the largest value n will reach
-        // if n == nonzero - 2, add in 'and'
-        // else if n < nonzero - 2, add in a comma
-        if n as isize == nonzero_count - 2 {
-            res.push_str(" and ")
-        } else if (n as isize) < nonzero_count - 2 {
-            res.push_str(", ")
-        }
-    }
-
-    return res;
+    return and_comma_split(&parts);
 }
 
 
