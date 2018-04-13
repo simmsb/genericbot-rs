@@ -19,7 +19,7 @@ fn to_triplets<I>(iter: I) -> Zip<(I, Skip<I>, Skip<I>)>
 }
 
 
-#[derive(Hash, Eq, PartialEq, Clone)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
 enum MarkovEntry<'a> {
     Start,
     Word(&'a str),
@@ -52,8 +52,9 @@ impl<'a> MChain<'a> {
 
             self.insert_triplet((MarkovEntry::Start, MarkovEntry::Start, first));
 
-            for (a, b, c) in to_triplets(split.into_iter()) {
-                self.insert_triplet((a, b, c));
+            for t in to_triplets(split.into_iter()) {
+                // println!("inserting triplet: {:?}", &t);
+                self.insert_triplet(t);
             }
         }
     }
@@ -75,13 +76,16 @@ impl<'a> MChain<'a> {
 
         let mut rng = rand::thread_rng();
 
+        // println!("current map: {:?}", &self.map);
+
         for _ in 0..limit {
             if let Some(r) = self.map.get(&state) {
                 let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: v, item: k}).collect();
                 let wc = WeightedChoice::new(&mut dist);
                 let next = wc.ind_sample(&mut rng);
+                // println!("current state: {}", &res);
                 match next {
-                    MarkovEntry::Word(w) => res.push_str(w),
+                    MarkovEntry::Word(w) => { res.push_str(" "); res.push_str(w); },
                     MarkovEntry::End     => return Some(res),
                     MarkovEntry::Start   => unreachable!(),
                 }

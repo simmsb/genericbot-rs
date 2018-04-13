@@ -1,13 +1,11 @@
 use chrono::NaiveDateTime;
 use ::schema::*;
 
+
 #[table_name="guild"]
-#[derive(Queryable, Insertable)]
-pub struct Guild {
+#[derive(Insertable)]
+pub struct NewGuild {
     pub id: i64,
-    pub markov_on: bool,
-    pub tag_prefix_on: bool,
-    pub commands_from: i64,
 }
 
 #[table_name="message"]
@@ -44,6 +42,14 @@ pub struct NewTag<'a> {
     pub guild_id: i64,
     pub key: &'a str,
     pub text: &'a str,
+}
+
+#[derive(Queryable)]
+pub struct Guild {
+    pub id: i64,
+    pub markov_on: bool,
+    pub tag_prefix_on: bool,
+    pub commands_from: i64,
 }
 
 #[derive(Queryable)]

@@ -1,4 +1,8 @@
-use serenity::model::id::{GuildId, UserId};
+use serenity::model::{
+    id::{GuildId, UserId, MessageId, ChannelId},
+    channel::Message,
+};
+use serenity::prelude::*;
 
 #[macro_use]
 pub mod macros;
@@ -47,4 +51,92 @@ pub fn and_comma_split<T: AsRef<str>>(m: &[T]) -> String {
         }
     }
     return res;
+}
+
+
+pub fn insert_missing_guilds(ctx: &Context) {
+    use diesel;
+    use diesel::prelude::*;
+    use models::NewGuild;
+    use schema::guild;
+    use ::PgConnectionManager;
+    use serenity::utils::with_cache;
+
+    let pool = extract_pool!(&ctx);
+
+    let guilds: Vec<_> = with_cache(|c| c.all_guilds().iter().map(
+        |&g| NewGuild { id: g.0 as i64 }
+    ).collect());
+
+    diesel::insert_into(guild::table)
+        .values(&guilds)
+        .on_conflict_do_nothing()
+        .execute(pool)
+        .expect("Error building any missing guilds.");
+}
+
+
+pub struct HistoryIterator {
+    last_id: Option<MessageId>,
+    channel: ChannelId,
+    message_vec: Vec<Message>,
+}
+
+
+/// An iterator over discord messages, runs forever through all the messages in a channel's history
+impl HistoryIterator {
+    pub fn new(c_id: ChannelId) -> Self {
+        HistoryIterator { last_id: None, channel: c_id, message_vec: Vec::new() }
+    }
+}
+
+
+impl Iterator for HistoryIterator {
+    type Item = Message;
+    fn next(&mut self) -> Option<Message> {
+        // no messages, get some more
+        if self.message_vec.len() == 0 {
+            match self.channel.messages(
+                |g| match self.last_id {
+                    Some(id) => g.before(id),
+                    None     => g
+                }) {
+                Ok(messages) => {
+                    if messages.len() == 0 {
+                        // no more messages to get, end iterator here
+                        return None;
+                    }
+                    self.message_vec.extend(messages);
+                    self.last_id = self.message_vec.last().map(|m| m.id);
+                },
+                Err(why) => panic!(format!("Couldn't get messages: {}, aborting.", why)),
+            }
+        }
+
+        let m = self.message_vec.pop();
+        if m.is_none() {
+            panic!("Messages didn't exist? aborting.");
+        }
+        return m;
+    }
+}
+
+
+pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<UserId, ()> {
+    if let Ok(u) = s.parse::<UserId>() {
+        return Ok(u);
+    }
+
+    if let Some(g) = g_id.find() {
+        let guild = g.read();
+
+        if let Some(m) = guild.member_named(s) {
+            let uid = m.user.read();
+            return Ok(uid.id);
+        } else {
+            return Err(());
+        }
+    } else {
+        return Err(());
+    }
 }

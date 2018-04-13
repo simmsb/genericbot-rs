@@ -21,6 +21,8 @@ extern crate hyper_native_tls;
 extern crate regex;
 extern crate itertools;
 extern crate rand;
+extern crate procinfo;
+extern crate systemstat;
 
 use serenity::{
     CACHE,
@@ -40,8 +42,9 @@ use diesel::{
 };
 use r2d2_diesel::ConnectionManager;
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use typemap::Key;
+
 
 struct Handler;
 
@@ -54,19 +57,51 @@ impl EventHandler for Handler {
         }
 
         background_tasks::background_task(&ctx);
+
+        utils::insert_missing_guilds(&ctx);
+    }
+
+    fn message(&self, ctx: Context, msg: Message) {
+        use schema::message;
+        use models::NewStoredMessage;
+
+        let g_id = match msg.guild_id() {
+            Some(id) => id.0 as i64,
+            None     => return,
+        };
+
+        if msg.content.len() < 40 {
+            return;
+        }
+
+        if !commands::markov::check_markov_state(&ctx, g_id) {
+            return;
+        }
+
+        let pool = extract_pool!(&ctx);
+
+        let to_insert = NewStoredMessage {
+            id: msg.id.0 as i64,
+            guild_id: g_id,
+            user_id: msg.author.id.0 as i64,
+            msg: &msg.content,
+            created_at: &msg.timestamp.naive_utc(),
+        };
+
+        diesel::insert_into(message::table)
+            .values(&to_insert)
+            .execute(pool)
+            .expect("Couldn't insert message.");
     }
 
     fn guild_create(&self, ctx: Context, guild: Guild, _: bool) {
         use schema::{guild, prefix};
-        use models::{Guild, NewPrefix};
+        use models::{NewGuild, NewPrefix};
 
         let pool = extract_pool!(&ctx);
 
-        let new_guild = Guild {
+        let new_guild = NewGuild {
             id: guild.id.0 as i64,
-            markov_on: false,
-            tag_prefix_on: false,
-            commands_from: 0,
         };
 
         let default_prefix = NewPrefix {
@@ -99,6 +134,19 @@ struct PgConnectionManager;
 
 impl Key for PgConnectionManager {
     type Value = r2d2::Pool<ConnectionManager<PgConnection>>;
+}
+
+struct StartTime;
+
+impl Key for StartTime {
+    type Value = chrono::NaiveDateTime;
+}
+
+
+struct CmdCounter;
+
+impl Key for CmdCounter {
+    type Value = Arc<RwLock<usize>>;
 }
 
 
@@ -159,6 +207,12 @@ fn setup(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
 
              match err {
                  Ok(_) => {
+                     {
+                         let lock = ctx.data.lock(); ;
+                         let mut count = lock.get::<CmdCounter>().unwrap().write().unwrap();
+                         *count += 1;
+                     }
+
                      if let Some(g_id) = msg.guild_id() {
                          let pool = extract_pool!(&ctx);
 
@@ -236,6 +290,7 @@ fn main() {
                       commands::admin::setup_admin,
                       commands::reminders::setup_reminders,
                       commands::markov::setup_markov,
+                      commands::misc::setup_misc,
                      ];
 
     let framework = setup_fns.iter().fold(
@@ -248,6 +303,8 @@ fn main() {
         let mut data = client.data.lock();
         data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
         data.insert::<PgConnectionManager>(pool);
+        data.insert::<StartTime>(chrono::Utc::now().naive_utc());
+        data.insert::<CmdCounter>(Arc::new(RwLock::new(0)));
     }
 
 
