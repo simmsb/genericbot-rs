@@ -95,14 +95,14 @@ impl Iterator for HistoryIterator {
     type Item = Message;
     fn next(&mut self) -> Option<Message> {
         // no messages, get some more
-        if self.message_vec.len() == 0 {
+        if self.message_vec.is_empty() {
             match self.channel.messages(
                 |g| match self.last_id {
                     Some(id) => g.before(id),
                     None     => g
                 }) {
                 Ok(messages) => {
-                    if messages.len() == 0 {
+                    if messages.is_empty() {
                         // no more messages to get, end iterator here
                         return None;
                     }

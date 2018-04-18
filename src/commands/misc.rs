@@ -10,6 +10,12 @@ use serenity::{
 use chrono::Utc;
 use procinfo;
 use std::time;
+use rand;
+use rand::Rng;
+use utils::{try_resolve_user};
+use itertools::Itertools;
+use whirlpool::{Whirlpool, Digest};
+use std::num::Wrapping;
 
 
 fn process_usage() -> f64 {
@@ -76,6 +82,61 @@ command!(status_cmd(ctx, msg) {
 });
 
 
+command!(q(_ctx, msg) {
+    void!(msg.channel_id.say(rand::thread_rng()
+                             .choose(&["Yes", "No"])
+                             .unwrap()));
+});
+
+
+command!(message_owner(ctx, _msg, args) {
+    use ::OwnerId;
+    let text = args.full();
+
+    let lock = ctx.data.lock();
+    let user = &lock.get::<OwnerId>().unwrap();
+    user.direct_message(|m| m.content(text))?;
+});
+
+
+macro_rules! x_someone {
+    ( $name:ident, $send_msg:expr, $err:expr ) => (
+        command!($name(_ctx, msg, args) {
+            let users: Vec<_> = args.multiple_quoted::<String>()
+                .map(|u| u.into_iter()
+                     .filter_map(|s| try_resolve_user(&s, msg.guild_id().unwrap()).ok())
+                     .collect())
+                .unwrap_or_else(|_| Vec::new());
+
+            let res = if !users.is_empty() {
+                let mention_list = users.into_iter().map(|u| u.mention()).join(", ");
+                format!($send_msg, msg.author.mention(), mention_list)
+            } else {
+                $err.to_string()
+            };
+
+            msg.channel_id.say(res)?;
+        });
+    )
+}
+
+
+x_someone!(hug, "{} hugs {}!", "You can't hug nobody!");
+x_someone!(slap, "{} slaps {}! B..Baka!!!", "Go slap yourself you baka");
+x_someone!(kiss, "{} Kisses {}! Chuuuu!", "DW anon you'll find someone to love some day!");
+
+
+command!(rate(_ctx, msg, args) {
+    let asked = args.full().trim();
+    let result = Whirlpool::digest_str(&asked);
+    let sum: Wrapping<u8> = result.into_iter().map(Wrapping).sum();
+
+    let modulus = sum % Wrapping(12);
+
+    void!(msg.channel_id.say(format!("I rate {}: {}/10", asked, modulus)));
+});
+
+
 pub fn setup_misc(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
     frame.group("Misc",
                 |g| g
@@ -83,5 +144,32 @@ pub fn setup_misc(_client: &mut Client, frame: StandardFramework) -> StandardFra
                          .cmd(status_cmd)
                          .desc("Bot stats")
                          .batch_known_as(&["status"])
-                ))
+                )
+                .command("q", |c| c
+                         .cmd(q)
+                         .desc("Ask a question")
+                )
+                .command("message_owner", |c| c
+                         .cmd(message_owner)
+                         .desc("Send a message to the bot owner.")
+                )
+                .command("hug", |c| c
+                         .cmd(hug)
+                         .desc("Hug someone")
+                         .guild_only(true)
+                )
+                .command("slap", |c| c
+                         .cmd(slap)
+                         .desc("Slap a bitch")
+                         .guild_only(true)
+                )
+                .command("kiss", |c| c
+                         .cmd(kiss)
+                         .desc("Kiss someone")
+                         .guild_only(true)
+                )
+                .command("rate", |c| c
+                         .cmd(rate)
+                         .desc("Rate something."))
+    )
 }

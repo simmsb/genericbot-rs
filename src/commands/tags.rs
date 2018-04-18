@@ -105,12 +105,12 @@ command!(add_tag(ctx, msg, args) {
     // let value = get_arg!(args, full, String, value).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
-        msg.channel_id.say(format!("The tag: {} already exists", t.key))?;
+        void!(msg.channel_id.say(format!("The tag: {} already exists", t.key)));
     } else if key.len() >= 50 {
-        msg.channel_id.say("Tag keys cannot be longer than 50 characters.")?;
+        void!(msg.channel_id.say("Tag keys cannot be longer than 50 characters."));
     } else {
         insert_tag(&ctx, &msg, &key, &value);
-        msg.channel_id.say(format!("Created tag: {} with content: {}!", key, value))?;
+        void!(msg.channel_id.say(format!("Created tag: {} with content: {}!", key, value)));
     }
 });
 
@@ -119,9 +119,9 @@ command!(tag(ctx, msg, args) {
     let key = get_arg!(args, multiple, String, key).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
-        msg.channel_id.say(t.text)?;
+        void!(msg.channel_id.say(t.text));
     } else {
-        msg.channel_id.say("This tag does not exist.")?;
+        void!(msg.channel_id.say("This tag does not exist."));
     }
 });
 
@@ -140,12 +140,12 @@ command!(delete_tag(ctx, msg, args) {
 
         if has_manage_messages || (t.author_id as u64 == msg.author.id.0) {
             delete_tag_do(&ctx, t.id);
-            msg.channel_id.say(format!("Deleted tag of name: {}.", t.key))?;
+            void!(msg.channel_id.say(format!("Deleted tag of name: {}.", t.key)));
         } else {
-            msg.channel_id.say(format!("You are not the owner of this tag or do not have manage messages."))?;
+            void!(msg.channel_id.say(format!("You are not the owner of this tag or do not have manage messages.")));
         }
     } else {
-        msg.channel_id.say("That tag does not exist.")?;
+        void!(msg.channel_id.say("That tag does not exist."));
     }
 });
 
@@ -157,7 +157,7 @@ command!(list_tags(ctx, msg, args) {
     let page = args.single::<i64>().unwrap_or(1) - 1;
 
     if page < 0 {
-        msg.channel_id.say(format!("That page does not exist."))?;
+        void!(msg.channel_id.say(format!("That page does not exist.")));
         return Ok(());
     }
 
@@ -167,7 +167,7 @@ command!(list_tags(ctx, msg, args) {
     let tag_count = get_tag_count(&ctx, msg.guild_id().unwrap().0 as i64);
 
     if start > tag_count {
-        msg.channel_id.say(format!("The requested page ({}) is greater than the number of pages ({}).", page, last / 20))?;
+        void!(msg.channel_id.say(format!("The requested page ({}) is greater than the number of pages ({}).", page, last / 20)));
         return Ok(());
     }
 
@@ -186,19 +186,19 @@ command!(list_tags(ctx, msg, args) {
         .push_codeblock_safe(tag_content, None)
         .build();
 
-    msg.channel_id.say(content)?;
+    void!(msg.channel_id.say(content));
 });
 
 
 command!(auto_tags_on(ctx, msg) {
     set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, true);
-    msg.channel_id.say("Enabled automatic tags on this guild.")?;
+    void!(msg.channel_id.say("Enabled automatic tags on this guild."));
 });
 
 
 command!(auto_tags_off(ctx, msg) {
     set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, false);
-    msg.channel_id.say("Disabled automatic tags on this guild.")?;
+    void!(msg.channel_id.say("Disabled automatic tags on this guild."));
 });
 
 

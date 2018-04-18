@@ -268,7 +268,7 @@ command!(remind_cmd(ctx, msg, args) {
 
     let delta = when.signed_duration_since(now);
 
-    msg.channel_id.say(format!("Okay, I'll remind you about {} in {}", remind_msg, human_timedelta(&delta)))?;
+    void!(msg.channel_id.say(format!("Okay, I'll remind you about {} in {}", remind_msg, human_timedelta(&delta))));
 });
 
 
@@ -287,7 +287,7 @@ command!(remind_list(ctx, msg) {
         .push_line(": ")
         .push_codeblock_safe(lines, None);
 
-    msg.channel_id.say(message)?;
+    void!(msg.channel_id.say(message));
 });
 
 
@@ -295,9 +295,9 @@ command!(delete_reminder_cmd(ctx, msg, args) {
     let index = get_arg!(args, single, usize, index) as i64;
 
     if delete_reminder(&ctx, msg.author.id.0 as i64, index) {
-        msg.channel_id.say("Deleted that reminder.")?;
+        void!(msg.channel_id.say("Deleted that reminder."));
     } else {
-        msg.channel_id.say("That reminder didn't exist.")?;
+        void!(msg.channel_id.say("That reminder didn't exist."));
     };
 
 });

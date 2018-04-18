@@ -30,7 +30,7 @@ command!(set_avatar(ctx, msg) {
             |e| e.avatar(Some(&data))
         )?;
 
-        msg.channel_id.say("Set avatar!")?;
+        void!(msg.channel_id.say("Set avatar!"));
         return Ok(());
     }
 });
@@ -68,10 +68,10 @@ command!(clean_guilds(ctx, msg, args) {
     }
 
     if dry_run {
-        msg.channel_id.say(format!("Would leave: {} guilds.", guilds_to_leave.len()))?;
+        void!(msg.channel_id.say(format!("Would leave: {} guilds.", guilds_to_leave.len())));
     } else {
         drop_guilds(&ctx, &guilds_to_leave);
-        msg.channel_id.say(format!("Leaving: {} guilds.", guilds_to_leave.len()))?;
+        void!(msg.channel_id.say(format!("Leaving: {} guilds.", guilds_to_leave.len())));
     }
 
 });

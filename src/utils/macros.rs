@@ -22,3 +22,10 @@ macro_rules! extract_pool {
         &*$ctx.data.lock().get::<PgConnectionManager>().unwrap().get().unwrap()
     )
 }
+
+
+macro_rules! void {
+    ( $d:expr ) => (
+        { let _ = $d; }
+    )
+}

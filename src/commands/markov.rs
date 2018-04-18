@@ -120,7 +120,7 @@ command!(markov_cmd(ctx, msg, args) {
     use utils::{names_for_members, and_comma_split};
 
     if !check_markov_state(&ctx, msg.guild_id().unwrap().0 as i64) {
-        msg.channel_id.say("You don't have markov chains enabled, use the 'markov_enable' command to enable them.")?;
+        void!(msg.channel_id.say("You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
         return Ok(());
     }
 
@@ -174,28 +174,28 @@ command!(markov_cmd(ctx, msg, args) {
         }
     }
 
-    msg.channel_id.say("Failed to generate a markov.")?;
+    void!(msg.channel_id.say("Failed to generate a markov."));
 });
 
 
 command!(markov_enable(ctx, msg) {
     set_markov(&ctx, msg.guild_id().unwrap().0 as i64, true);
-    msg.channel_id.say("Enabled markov chains for this guild, now filling messages...")?;
+    void!(msg.channel_id.say("Enabled markov chains for this guild, now filling messages..."));
     let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
-    msg.channel_id.say(format!("Build the markov chain with {} messages", count))?;
+    void!(msg.channel_id.say(format!("Build the markov chain with {} messages", count)));
 });
 
 
 command!(markov_disable(ctx, msg) {
     set_markov(&ctx, msg.guild_id().unwrap().0 as i64, false);
     drop_messages(&ctx, msg.guild_id().unwrap().0 as i64);
-    msg.channel_id.say("Disabled markov chains for this guild.")?;
+    void!(msg.channel_id.say("Disabled markov chains for this guild."));
 });
 
 
 command!(fill_markov(ctx, msg) {
     let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
-    msg.channel_id.say(format!("Inserted {} messages into the chain.", count))?;
+    void!(msg.channel_id.say(format!("Inserted {} messages into the chain.", count)));
 });
 
 

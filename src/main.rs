@@ -23,6 +23,7 @@ extern crate itertools;
 extern crate rand;
 extern crate procinfo;
 extern crate systemstat;
+extern crate whirlpool;
 
 use serenity::{
     CACHE,
@@ -150,6 +151,13 @@ impl Key for CmdCounter {
 }
 
 
+struct OwnerId;
+
+impl Key for OwnerId {
+    type Value = serenity::model::user::User;
+}
+
+
 fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<Vec<String>>> {
     use schema::prefix::dsl::*;
 
@@ -168,7 +176,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<Vec<String>>> {
 }
 
 // Our setup stuff
-fn setup(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
+fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     use serenity::framework::standard::{
         DispatchError::*,
         help_commands,
@@ -181,6 +189,10 @@ fn setup(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
         Ok(info) => {
             let mut set = HashSet::new();
             set.insert(info.owner.id);
+            {
+                let mut data = client.data.lock();
+                data.insert::<OwnerId>(info.owner);
+            }
             set
         },
         Err(why) => panic!("Couldn't retrieve app info: {:?}", why),
