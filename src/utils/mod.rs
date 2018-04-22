@@ -2,6 +2,7 @@ use serenity::{
     model::{
         id::{GuildId, UserId, MessageId, ChannelId},
         channel::Message,
+        guild::Member,
     },
     framework::standard::{
         Args,
@@ -128,20 +129,15 @@ impl Iterator for HistoryIterator {
 }
 
 
-pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<UserId, ()> {
-    if let Ok(u) = s.parse::<UserId>() {
-        return Ok(u);
-    }
-
+pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
     if let Some(g) = g_id.find() {
         let guild = g.read();
 
-        if let Some(m) = guild.member_named(s) {
-            let uid = m.user.read();
-            return Ok(uid.id);
-        } else {
-            return Err(());
+        if let Ok(u) = s.parse::<UserId>() {
+            return guild.member(u).map_err(|_| ());
         }
+
+        return guild.member_named(s).map(|m| m.clone()).ok_or(());
     } else {
         return Err(());
     }

@@ -7,7 +7,7 @@ CREATE TABLE guild (
 
 CREATE TABLE message (
        id BIGINT PRIMARY KEY,
-       guild_id BIGINT NOT NULL REFERENCES guild (id),
+       guild_id BIGINT NOT NULL REFERENCES guild (id) ON DELETE CASCADE,
        user_id BIGINT NOT NULL,
        msg VARCHAR(2000) NOT NULL,
        created_at TIMESTAMP NOT NULL
@@ -15,7 +15,7 @@ CREATE TABLE message (
 
 CREATE TABLE "prefix" (
        id BIGSERIAL PRIMARY KEY,
-       guild_id BIGINT NOT NULL REFERENCES guild (id),
+       guild_id BIGINT NOT NULL REFERENCES guild (id) ON DELETE CASCADE,
        pre VARCHAR(2000) NOT NULL,
        UNIQUE (guild_id, pre)
 );
@@ -33,7 +33,7 @@ CREATE TABLE reminder (
 CREATE TABLE tag (
        id BIGSERIAL PRIMARY KEY,
        author_id BIGINT NOT NULL,
-       guild_id BIGINT NOT NULL REFERENCES guild (id),
+       guild_id BIGINT NOT NULL REFERENCES guild (id) ON DELETE CASCADE,
        "key" VARCHAR(2000) NOT NULL,
        text VARCHAR(2000) NOT NULL,
        UNIQUE (guild_id, "key")

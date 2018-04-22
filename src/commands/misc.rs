@@ -33,7 +33,7 @@ fn process_usage() -> f64 {
 command!(status_cmd(ctx, msg) {
     use ::{StartTime, CmdCounter};
 
-    let mem_usage = procinfo::pid::statm_self().ok().map_or(0, |p| p.resident);
+    let mem_usage = procinfo::pid::statm_self().ok().map_or(0, |p| p.resident) / 1000;
     let cpu_usage = process_usage();
     let uptime = {
         let &start = ctx.data.lock().get::<StartTime>().unwrap();

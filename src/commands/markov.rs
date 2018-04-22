@@ -8,6 +8,7 @@ use serenity::{
         id::ChannelId,
         permissions::Permissions,
     },
+    utils::Colour,
 };
 use utils::{markov, try_resolve_user};
 use diesel;
@@ -116,6 +117,21 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
 }
 
 
+fn average_colours(colours: Vec<Colour>) -> Colour {
+    let (s_r, s_g, s_b) = colours.iter().fold((0, 0, 0),
+        |(r, g, b), &c| (r + (c.r() as u16).pow(2),
+                         g + (c.g() as u16).pow(2),
+                         b + (c.b() as u16).pow(2))
+    );
+
+    let len = colours.len() as f32;
+    let (a_r, a_g, a_b) = (s_r as f32 / len, s_g as f32 / len, s_b as f32 / len);
+    let res = (a_r.sqrt() as u8, a_g.sqrt() as u8, a_b.sqrt() as u8);
+
+    Colour::from(res)
+}
+
+
 command!(markov_cmd(ctx, msg, args) {
     use utils::{names_for_members, and_comma_split};
 
@@ -125,33 +141,31 @@ command!(markov_cmd(ctx, msg, args) {
     }
 
     // All this to just get a random user?
-    let users: Vec<_> = args.multiple_quoted::<String>()
-        .map(|u| u.into_iter() // resolve users
+    let members: Vec<_> = args.multiple_quoted::<String>()
+        .map(|u| u.into_iter() // resolve members
              .filter_map(|s| try_resolve_user(&s, msg.guild_id().unwrap()).ok())
              .collect::<Vec<_>>()
         )
         .ok()
         .or_else( // this fails us if the vec is empty, so grab a random user
             || {
-                // println!("finding users");
                 msg.guild_id().unwrap().find().and_then(|g| {
                     let guild = g.read();
                     let member_ids: Vec<_> = guild.members.keys().collect();
-                    rand::thread_rng()
-                        .choose(&member_ids)
-                        .map(|&&m_id| vec![m_id])
+                    let &&member_id = rand::thread_rng()
+                        .choose(&member_ids)?;
+                    guild.member(member_id).ok().map(|m| vec![m.clone()])
                 })
             }
         )
-        .ok_or(CommandError::from("Couldn't get any users to markov on"))?;
+        .ok_or(CommandError::from("Couldn't get any members to markov on"))?;
 
+    let users: Vec<_> = members.iter().map(|m| m.user.read().id).collect();
 
     let user_names = names_for_members(&users, msg.guild_id().unwrap());
     let user_names_s = and_comma_split(&user_names);
 
     let user_ids = users.iter().map(|&id| id.0 as i64).collect();
-
-    // println!("user id's: {:?}", &user_ids);
 
     let messages = get_messages(&ctx, msg.guild_id().unwrap().0 as i64, user_ids);
 
@@ -161,12 +175,17 @@ command!(markov_cmd(ctx, msg, args) {
         chain.add_string(&msg);
     }
 
+    let colours: Vec<_> = members.iter().filter_map(|ref m| m.colour()).collect();
+
+    let col = average_colours(colours);
+
     for _ in 0..10 { // try 10 times
         if let Some(generated) = chain.generate_string(40) {
             msg.channel_id.send_message(
                 |m| m.embed(
                     |e| e
                         .title(format!("A markov chain composed of: {}.", user_names_s))
+                        .colour(col)
                         .description(generated)
                     )
             )?;

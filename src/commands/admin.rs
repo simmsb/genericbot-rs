@@ -77,6 +77,16 @@ command!(clean_guilds(ctx, msg, args) {
 });
 
 
+command!(stop_bot(ctx, msg) {
+    use ::ShardManagerContainer;
+
+    void!(msg.channel_id.say("🤖🔫"));
+    let lock = ctx.data.lock();
+    let mut manager = lock.get::<ShardManagerContainer>().unwrap().lock();
+    manager.shutdown_all();
+});
+
+
 pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
     frame.group("Admin",
                 |g| g
@@ -93,6 +103,11 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
                         .desc("Cleanup guilds from bot db. Does a dry calculation by default.")
                         .usage("{non-dry}")
                         .max_args(1)
+                )
+                .command(
+                    "stop_bot", |c| c
+                        .cmd(stop_bot)
+                        .desc("Bye")
                 )
     )
 }
