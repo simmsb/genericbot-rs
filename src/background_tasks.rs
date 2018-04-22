@@ -12,13 +12,8 @@ use std::{
     time,
 };
 use dotenv;
-use hyper::{
-    net::HttpsConnector,
-    header::Authorization,
-};
 use ::PgConnectionManager;
-use hyper;
-use hyper_native_tls::NativeTlsClient;
+use reqwest;
 use models::Reminder;
 use chrono::{Utc, Duration};
 
@@ -36,21 +31,22 @@ pub fn background_task(ctx: &Context) {
                     _     => return,
                 };
 
+                let bot_id = utils::with_cache(|c| c.user.id);
+                let mut headers = reqwest::header::Headers::new();
+                headers.set(reqwest::header::Authorization(botlist_key.to_owned()));
+                let client = reqwest::Client::builder()
+                    .default_headers(headers)
+                    .build()
+                    .unwrap();
+
                 loop {
-                    thread::sleep(time::Duration::from_secs(5 * 60));
+                    thread::sleep(time::Duration::from_secs(60 * 60));  // every hour
 
                     {
-                        let tc = NativeTlsClient::new().unwrap();
-                        let conn = HttpsConnector::new(tc);
-                        let client = hyper::Client::with_connector(conn);
-
-                        let bot_id = utils::with_cache(|c| c.user.id);
                         let guild_count = utils::with_cache(|c| c.all_guilds().len());
-                        let header = Authorization(botlist_key.to_owned());
 
                         let _ = client.post(&format!("https://bots.discord.pw/api/bots/{}/stats", bot_id))
-                                      .header(header)
-                                      .body(&format!(r#"{{"server_count": {}}}"#, guild_count))
+                                      .body(format!(r#"{{"server_count": {}}}"#, guild_count))
                                       .send();
                     }
                 }});

@@ -5,6 +5,7 @@ use serenity::{
     },
     utils::{
         with_cache,
+        MessageBuilder,
     },
 };
 use chrono::Utc;
@@ -137,39 +138,88 @@ command!(rate(_ctx, msg, args) {
 });
 
 
+command!(ping_cmd(_ctx, msg) {
+    let recvd = Utc::now().naive_utc();
+    let created = msg.id.created_at();
+
+    if let Ok(mut tmp) = msg.channel_id.say("...") {
+        let send_to_recv = recvd.signed_duration_since(created);
+        let send_to_repl = tmp.id.created_at().signed_duration_since(created);
+
+        let reply = MessageBuilder::new()
+            .push("Send to recv: ")
+            .push(send_to_recv.num_milliseconds())
+            .push_line("ms")
+            .push("Send to reply: ")
+            .push(send_to_repl.num_milliseconds())
+            .push_line("ms")
+            .build();
+
+        void!(tmp.edit(|m| m.content(reply)));
+    }
+});
+
+
+command!(stando(_ctx, msg) {
+    let menacing = format!("***{}***", "ゴ".repeat(200));
+    let out = MessageBuilder::new()
+        .push_line(&menacing)
+        .push("ＴＨＩＳ 　ＭＵＳＴ 　ＢＥ 　ＴＨＥ 　ＷＯＲＫ 　ＯＦ 　ＡＮ 　ＥＮＥＭＹ 「")
+        .mention(&msg.author)
+        .push_line("」*！！*")
+        .push(&menacing)
+        .build();
+
+    void!(msg.channel_id.say(out));
+});
+
+
 pub fn setup_misc(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
-    frame.group("Misc",
-                |g| g
-                .command("stats", |c| c
-                         .cmd(status_cmd)
-                         .desc("Bot stats")
-                         .batch_known_as(&["status"])
-                )
-                .command("q", |c| c
-                         .cmd(q)
-                         .desc("Ask a question")
-                )
-                .command("message_owner", |c| c
-                         .cmd(message_owner)
-                         .desc("Send a message to the bot owner.")
-                )
-                .command("hug", |c| c
-                         .cmd(hug)
-                         .desc("Hug someone")
-                         .guild_only(true)
-                )
-                .command("slap", |c| c
-                         .cmd(slap)
-                         .desc("Slap a bitch")
-                         .guild_only(true)
-                )
-                .command("kiss", |c| c
-                         .cmd(kiss)
-                         .desc("Kiss someone")
-                         .guild_only(true)
-                )
-                .command("rate", |c| c
-                         .cmd(rate)
-                         .desc("Rate something."))
-    )
+    frame
+        .group("Misc",
+               |g| g
+               .command("stats", |c| c
+                        .cmd(status_cmd)
+                        .desc("Bot stats")
+                        .batch_known_as(&["status"])
+               )
+               .command("q", |c| c
+                        .cmd(q)
+                        .desc("Ask a question")
+               )
+               .command("message_owner", |c| c
+                        .cmd(message_owner)
+                        .desc("Send a message to the bot owner.")
+               )
+               .command("hug", |c| c
+                        .cmd(hug)
+                        .desc("Hug someone")
+                        .guild_only(true)
+               )
+               .command("slap", |c| c
+                        .cmd(slap)
+                        .desc("Slap a bitch")
+                        .guild_only(true)
+               )
+               .command("kiss", |c| c
+                        .cmd(kiss)
+                        .desc("Kiss someone")
+                        .guild_only(true)
+               )
+               .command("rate", |c| c
+                        .cmd(rate)
+                        .desc("Rate something.")
+               )
+               .command("ping", |c| c
+                        .cmd(ping_cmd)
+                        .desc("Ping discord")
+               )
+        )
+        .group("Hidden",
+               |g| g
+               .help_available(false)
+               .command("stando", |c| c
+                        .cmd(stando)
+                        .desc("An enemy stand!"))
+        )
 }

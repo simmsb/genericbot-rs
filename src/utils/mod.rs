@@ -1,6 +1,12 @@
-use serenity::model::{
-    id::{GuildId, UserId, MessageId, ChannelId},
-    channel::Message,
+use serenity::{
+    model::{
+        id::{GuildId, UserId, MessageId, ChannelId},
+        channel::Message,
+    },
+    framework::standard::{
+        Args,
+        CommandOptions,
+    },
 };
 use serenity::prelude::*;
 
@@ -139,4 +145,9 @@ pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<UserId, ()> {
     } else {
         return Err(());
     }
+}
+
+
+pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions) -> bool {
+    msg.channel_id.find().map_or(false, |c| c.is_nsfw())
 }

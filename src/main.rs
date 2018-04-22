@@ -10,20 +10,21 @@ mod commands;
 #[macro_use] extern crate serenity;
 #[macro_use] extern crate diesel;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate log;
+#[macro_use] extern crate serde_json;
 extern crate dotenv;
 extern crate r2d2;
 extern crate r2d2_diesel;
 extern crate chrono;
 extern crate typemap;
 extern crate base64;
-extern crate hyper;
-extern crate hyper_native_tls;
 extern crate regex;
 extern crate itertools;
 extern crate rand;
 extern crate procinfo;
 extern crate systemstat;
 extern crate whirlpool;
+extern crate reqwest;
 
 use serenity::{
     CACHE,
@@ -303,6 +304,7 @@ fn main() {
                       commands::reminders::setup_reminders,
                       commands::markov::setup_markov,
                       commands::misc::setup_misc,
+                      commands::booru::setup_booru,
                      ];
 
     let framework = setup_fns.iter().fold(
