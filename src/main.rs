@@ -241,6 +241,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
              }
          })
         .configure(|c| c
+                   .allow_whitespace(true)
                    .dynamic_prefixes(get_prefixes)
                    .prefix("--")
                    .owners(owners))
@@ -307,6 +308,7 @@ fn main() {
                       commands::markov::setup_markov,
                       commands::misc::setup_misc,
                       commands::booru::setup_booru,
+                      commands::prefixes::setup_prefixes,
                      ];
 
     let framework = setup_fns.iter().fold(
