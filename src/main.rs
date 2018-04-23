@@ -395,7 +395,7 @@ impl SharedLogger for DiscordLogger {
 fn main() {
     CombinedLogger::init(
         vec![
-            TermLogger::new(LevelFilter::Info, Config::default()).unwrap(),
+            SimpleLogger::new(LevelFilter::Info, Config::default()),
             DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
         ]
     ).unwrap();
