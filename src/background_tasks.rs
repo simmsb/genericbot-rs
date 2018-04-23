@@ -26,9 +26,13 @@ pub fn background_task(ctx: &Context) {
     BOTLIST_UPDATE_START.call_once(|| {
         thread::spawn(
             move || {
+                info!(target: "bot", "Starting botlist updater process");
                 let botlist_key = match dotenv::var("DISCORD_BOT_LIST_TOKEN") {
                     Ok(x) => x.to_owned(),
-                    _     => return,
+                    _     => {
+                        warn!(target: "bot", "No botlist token set");
+                        return;
+                    },
                 };
 
                 let bot_id = utils::with_cache(|c| c.user.id);

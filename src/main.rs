@@ -329,7 +329,7 @@ pub fn log_message(msg: &str) {
 
     let chan_id = dotenv::var("DISCORD_BOT_LOG_CHAN").unwrap().parse::<u64>().unwrap();
     if let Some(Guild(chan)) = CACHE.read().channel(chan_id) {
-        chan.read().say(msg).unwrap();
+        void!(chan.read().say(msg));
     }
 }
 
