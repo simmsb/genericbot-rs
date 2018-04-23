@@ -4,6 +4,9 @@ use serenity::{
     },
     prelude::*,
     utils::MessageBuilder,
+    model::{
+        id::GuildId,
+    },
 };
 use diesel;
 use diesel::prelude::*;
@@ -12,40 +15,40 @@ use ::PgConnectionManager;
 use ::PrefixCache;
 
 
-fn get_prefixes(ctx: &Context, g_id: i64) -> Vec<String> {
+fn delete_prefix(ctx: &Context, p: &str, g_id: GuildId) {
     use schema::prefix::dsl::*;
 
-    let pool = extract_pool!(&ctx);
+    let data = ctx.data.lock();
+    let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
+    let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
 
-    prefix.filter(guild_id.eq(g_id))
-                  .select(pre)
-                  .load(pool)
-                  .expect("Couldn't load prefixes")
-}
-
-
-fn delete_prefix(ctx: &Context, p: &str, g_id: i64) {
-    use schema::prefix::dsl::*;
-
-    let pool = extract_pool!(&ctx);
+    if let Some(mut pre_vec) = cache.get_mut(&g_id).map(|l| l.write()) {
+        pre_vec.remove_item(&p.to_owned());
+    }
 
     diesel::delete(prefix
                    .filter(pre.eq(p))
-                   .filter(guild_id.eq(g_id)))
+                   .filter(guild_id.eq(g_id.0 as i64)))
         .execute(pool)
         .unwrap();
 }
 
 
-fn add_prefix(ctx: &Context, prefix: &str, g_id: i64) {
+fn add_prefix(ctx: &Context, p: &str, g_id: GuildId) {
     use schema::prefix;
     use models::NewPrefix;
 
-    let pool = extract_pool!(&ctx);
+    let data = ctx.data.lock();
+    let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
+    let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+
+    if let Some(mut pre_vec) = cache.get_mut(&g_id).map(|l| l.write()) {
+        pre_vec.push(p.to_owned());
+    }
 
     let pre = NewPrefix {
-        guild_id: g_id,
-        pre: prefix,
+        guild_id: g_id.0 as i64,
+        pre: p,
     };
 
     diesel::insert_into(prefix::table)
@@ -59,7 +62,7 @@ fn add_prefix(ctx: &Context, prefix: &str, g_id: i64) {
 command!(add_prefix_cmd(ctx, msg, args) {
     let prefix = args.full_quoted();
 
-    add_prefix(&ctx, &prefix, msg.guild_id().unwrap().0 as i64);
+    add_prefix(&ctx, &prefix, msg.guild_id().unwrap());
 
     let resp = MessageBuilder::new()
         .push("Added the prefix: ")
@@ -72,7 +75,9 @@ command!(add_prefix_cmd(ctx, msg, args) {
 
 
 command!(list_prefixes_cmd(ctx, msg) {
-    let prefixes = get_prefixes(&ctx, msg.guild_id().unwrap().0 as i64);
+    use ::get_prefixes;
+    let prefixes_l = get_prefixes(ctx, &msg).unwrap();
+    let prefixes = prefixes_l.read();
 
     let resp = MessageBuilder::new()
         .push("Prefixes for this guild: ")
@@ -86,7 +91,7 @@ command!(list_prefixes_cmd(ctx, msg) {
 command!(delete_prefix_cmd(ctx, msg, args) {
     let prefix = args.full_quoted();
 
-    delete_prefix(&ctx, &prefix, msg.guild_id().unwrap().0 as i64);
+    delete_prefix(&ctx, &prefix, msg.guild_id().unwrap());
 
     let resp = MessageBuilder::new()
         .push("Deleted the prefix: ")

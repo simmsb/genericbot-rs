@@ -26,6 +26,7 @@ extern crate systemstat;
 extern crate whirlpool;
 extern crate reqwest;
 extern crate lru_cache;
+extern crate threadpool;
 
 use serenity::{
     CACHE,
@@ -46,9 +47,10 @@ use diesel::{
 };
 use r2d2_diesel::ConnectionManager;
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use typemap::Key;
 use lru_cache::LruCache;
+use threadpool::ThreadPool;
 
 
 struct Handler;
@@ -164,30 +166,36 @@ impl Key for OwnerId {
 struct PrefixCache;
 
 impl Key for PrefixCache {
-    type Value = Arc<Mutex<LruCache<GuildId, Arc<Vec<String>>>>>;
+    // Jesus christ
+    type Value = Arc<Mutex<LruCache<GuildId, Arc<RwLock<Vec<String>>>>>>;
 }
 
-fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<Vec<String>>> {
+struct ThreadPoolCache;
+
+impl Key for ThreadPoolCache {
+    type Value = Arc<Mutex<ThreadPool>>;
+}
+
+
+fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>>>> {
     use schema::prefix::dsl::*;
 
     if let Some(g_id) = m.guild_id() {
 
         let data = ctx.data.lock();
         let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
+        let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
 
-        let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-
-        match cache.get_mut(&g_id) {
-            Some(val) => return Some(val.clone()),
-            None      => (),
-        };
+        if let Some(val) = cache.get_mut(&g_id) {
+            return Some(val.clone());
+        }
 
         let prefixes = prefix
             .filter(guild_id.eq(g_id.0 as i64))
             .select(pre)
             .load::<String>(pool)
             .expect("Error loading prefixes");
-        let prefixes = Arc::new(prefixes);
+        let prefixes = Arc::new(RwLock::new(prefixes));
         cache.insert(g_id, prefixes.clone());
         Some(prefixes.clone())
     } else {
@@ -241,7 +249,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                  Ok(_) => {
                      {
                          let lock = ctx.data.lock(); ;
-                         let mut count = lock.get::<CmdCounter>().unwrap().write().unwrap();
+                         let mut count = lock.get::<CmdCounter>().unwrap().write();
                          *count += 1;
                      }
 
@@ -341,6 +349,7 @@ fn main() {
         data.insert::<StartTime>(chrono::Utc::now().naive_utc());
         data.insert::<CmdCounter>(Arc::new(RwLock::new(0)));
         data.insert::<PrefixCache>(Arc::new(Mutex::new(LruCache::new(100))));
+        data.insert::<ThreadPoolCache>(Arc::new(Mutex::new(client.threadpool.clone())));
     }
 
 

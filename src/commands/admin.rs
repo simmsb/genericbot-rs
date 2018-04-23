@@ -4,6 +4,9 @@ use serenity::{
     framework::standard::{
         StandardFramework,
     },
+    utils::{
+        MessageBuilder,
+    },
 };
 use diesel;
 use diesel::prelude::*;
@@ -87,6 +90,30 @@ command!(stop_bot(ctx, msg) {
 });
 
 
+command!(admin_stats(ctx, msg) {
+    use ::ThreadPoolCache;
+
+    let data = ctx.data.lock();
+    let dpool = &*data.get::<PgConnectionManager>().unwrap();
+    let tpool = &*data.get::<ThreadPoolCache>().unwrap().lock();
+
+    let inner = MessageBuilder::new()
+        .push("Active threads: ")
+        .push_line(tpool.active_count())
+        .push("Queued threads: ")
+        .push_line(tpool.queued_count())
+        .push("DB Connections: ")
+        .push_line(dpool.state().connections)
+        .build();
+
+    let resp = MessageBuilder::new()
+        .push_codeblock(inner, None)
+        .build();
+
+    void!(msg.channel_id.say(resp));
+});
+
+
 pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
     frame.group("Admin",
                 |g| g
@@ -108,6 +135,11 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
                     "stop_bot", |c| c
                         .cmd(stop_bot)
                         .desc("Bye")
+                )
+                .command(
+                    "admin_stats", |c| c
+                        .cmd(admin_stats)
+                        .desc("Administrator stats")
                 )
     )
 }

@@ -44,7 +44,7 @@ command!(status_cmd(ctx, msg) {
 
     let cmd_count = {
         let lock = ctx.data.lock();
-        let count = *lock.get::<CmdCounter>().unwrap().read().unwrap();
+        let count = *lock.get::<CmdCounter>().unwrap().read();
         count
     };
 
