@@ -27,6 +27,7 @@ extern crate whirlpool;
 extern crate reqwest;
 extern crate lru_cache;
 extern crate threadpool;
+extern crate simplelog;
 
 use serenity::{
     CACHE,
@@ -51,6 +52,8 @@ use std::sync::Arc;
 use typemap::Key;
 use lru_cache::LruCache;
 use threadpool::ThreadPool;
+use log::{LevelFilter, Metadata, Record, Log};
+use simplelog::*;
 
 
 struct Handler;
@@ -60,7 +63,7 @@ impl EventHandler for Handler {
         use background_tasks;
 
         if let Some(shard) = ready.shard {
-            println!("Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
+            info!(target: "bot", "Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
 
             ctx.set_game(Game::playing(&format!("Little generic bot | #!help | Shard {}", shard[0])));
         }
@@ -103,11 +106,25 @@ impl EventHandler for Handler {
             .expect("Couldn't insert message.");
     }
 
-    fn guild_create(&self, ctx: Context, guild: Guild, _: bool) {
-        use schema::{guild, prefix};
+    fn guild_create(&self, ctx: Context, guild: Guild, _new: bool) {
+        // use schema::{guild, prefix};
+        use schema;
         use models::{NewGuild, NewPrefix};
+        use diesel::dsl::exists;
 
         let pool = extract_pool!(&ctx);
+
+        let guild_known: bool = diesel::select(exists(
+            schema::guild::table
+                .find(guild.id.0 as i64)))
+            .get_result(pool)
+            .expect("Failed to check guild existence");
+
+        if guild_known {
+            return;
+        }
+
+        info!(target: "bot", "Joined guild: {}", guild.name);
 
         let new_guild = NewGuild {
             id: guild.id.0 as i64,
@@ -118,13 +135,13 @@ impl EventHandler for Handler {
             pre: "#!",
         };
 
-        diesel::insert_into(guild::table)
+        diesel::insert_into(schema::guild::table)
             .values(&new_guild)
             .on_conflict_do_nothing()
             .execute(pool)
             .expect("Couldn't create guild");
 
-        diesel::insert_into(prefix::table)
+        diesel::insert_into(schema::prefix::table)
             .values(&default_prefix)
             .on_conflict_do_nothing()
             .execute(pool)
@@ -228,7 +245,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 
     frame
         .on_dispatch_error(| _, msg, err | {
-            println!("handling error: {:?}", err);
+            debug!(target: "bot", "handling error: {:?}", err);
             let s = match err {
                 OnlyForGuilds =>
                     "This command can only be used in private messages.".to_string(),
@@ -307,7 +324,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 }
 
 
-pub fn log_message(msg: &String) {
+pub fn log_message(msg: &str) {
     use serenity::model::channel::Channel::Guild;
 
     let chan_id = dotenv::var("DISCORD_BOT_LOG_CHAN").unwrap().parse::<u64>().unwrap();
@@ -317,7 +334,72 @@ pub fn log_message(msg: &String) {
 }
 
 
+struct DiscordLogger {
+    level: LevelFilter,
+    config: Config,
+    filter_target: String,
+}
+
+
+impl DiscordLogger {
+    // fn init(log_level: LevelFilter, config: Config) -> Result<(), SetLoggerError> {
+    //     set_max_level(log_level.clone());
+    //     set_boxed_logger(DiscordLogger::new(log_level, config))
+    // }
+
+    fn new(log_level: LevelFilter, config: Config, filter_target: &str) -> Box<DiscordLogger> {
+        Box::new(DiscordLogger { level: log_level, config: config, filter_target: filter_target.to_owned() })
+    }
+}
+
+
+impl Log for DiscordLogger {
+
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= self.level
+    }
+
+    fn log(&self, record: &Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+
+        if self.filter_target != record.target() {
+            return;
+        }
+
+        log_message(&format!("LOG: {}:{} -- {}", record.level(), record.target(), record.args()));
+    }
+
+    fn flush(&self) {
+    }
+}
+
+
+impl SharedLogger for DiscordLogger {
+    fn level(&self) -> LevelFilter {
+        self.level
+    }
+
+    fn config(&self) -> Option<&Config>
+    {
+        Some(&self.config)
+    }
+
+    fn as_log(self: Box<Self>) -> Box<Log> {
+        Box::new(*self)
+    }
+}
+
+
 fn main() {
+    CombinedLogger::init(
+        vec![
+            TermLogger::new(LevelFilter::Info, Config::default()).unwrap(),
+            DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
+        ]
+    ).unwrap();
+
     let token = dotenv::var("DISCORD_BOT_TOKEN").unwrap();
     let db_url = dotenv::var("DISCORD_BOT_DB").unwrap();
 
@@ -351,7 +433,6 @@ fn main() {
         data.insert::<PrefixCache>(Arc::new(Mutex::new(LruCache::new(100))));
         data.insert::<ThreadPoolCache>(Arc::new(Mutex::new(client.threadpool.clone())));
     }
-
 
     if let Err(why) = client.start_autosharded() {
         println!("AAA: {:?}", why);
