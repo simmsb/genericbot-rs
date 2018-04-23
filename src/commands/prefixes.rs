@@ -9,6 +9,7 @@ use diesel;
 use diesel::prelude::*;
 use itertools::Itertools;
 use ::PgConnectionManager;
+use ::PrefixCache;
 
 
 fn get_prefixes(ctx: &Context, g_id: i64) -> Vec<String> {

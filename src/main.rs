@@ -25,12 +25,14 @@ extern crate procinfo;
 extern crate systemstat;
 extern crate whirlpool;
 extern crate reqwest;
+extern crate lru_cache;
 
 use serenity::{
     CACHE,
     prelude::*,
     model::{
         guild::Guild,
+        id::GuildId,
         channel::Message,
         gateway::{Ready, Game},
     },
@@ -46,6 +48,7 @@ use r2d2_diesel::ConnectionManager;
 
 use std::sync::{Arc, RwLock};
 use typemap::Key;
+use lru_cache::LruCache;
 
 
 struct Handler;
@@ -146,13 +149,11 @@ impl Key for StartTime {
     type Value = chrono::NaiveDateTime;
 }
 
-
 struct CmdCounter;
 
 impl Key for CmdCounter {
     type Value = Arc<RwLock<usize>>;
 }
-
 
 struct OwnerId;
 
@@ -160,19 +161,35 @@ impl Key for OwnerId {
     type Value = serenity::model::user::User;
 }
 
+struct PrefixCache;
+
+impl Key for PrefixCache {
+    type Value = Arc<Mutex<LruCache<GuildId, Arc<Vec<String>>>>>;
+}
 
 fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<Vec<String>>> {
     use schema::prefix::dsl::*;
 
-    let pool = extract_pool!(&ctx);
-
     if let Some(g_id) = m.guild_id() {
+
+        let data = ctx.data.lock();
+        let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
+
+        let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+
+        match cache.get_mut(&g_id) {
+            Some(val) => return Some(val.clone()),
+            None      => (),
+        };
+
         let prefixes = prefix
             .filter(guild_id.eq(g_id.0 as i64))
             .select(pre)
             .load::<String>(pool)
             .expect("Error loading prefixes");
-        Some(Arc::new(prefixes))
+        let prefixes = Arc::new(prefixes);
+        cache.insert(g_id, prefixes.clone());
+        Some(prefixes.clone())
     } else {
         None
     }
@@ -323,6 +340,7 @@ fn main() {
         data.insert::<PgConnectionManager>(pool);
         data.insert::<StartTime>(chrono::Utc::now().naive_utc());
         data.insert::<CmdCounter>(Arc::new(RwLock::new(0)));
+        data.insert::<PrefixCache>(Arc::new(Mutex::new(LruCache::new(100))));
     }
 
 
