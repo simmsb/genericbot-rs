@@ -44,21 +44,22 @@ pub fn background_task(ctx: &Context) {
                     .unwrap();
 
                 loop {
+                    thread::sleep(time::Duration::from_secs(60 * 60));  // every hour
                     {
                         let guild_count = utils::with_cache(|c| c.all_guilds().len());
 
                         info!(target: "bot", "Sent update to botlist, with count: {}", guild_count);
 
                         let resp = client.post(&format!("https://bots.discord.pw/api/bots/{}/stats", bot_id))
-                                         .body(format!(r#"{{"server_count": {}}}"#, guild_count))
+                                         .json(&json!({
+                                             "server_count": guild_count
+                                         }))
                                          .send();
 
                         if let Ok(mut resp) = resp {
                             info!(target: "bot", "Response from botlist. status: {}, body: {:?}", resp.status(), resp.text());
                         }
                     }
-
-                    thread::sleep(time::Duration::from_secs(60 * 60));  // every hour
                 }});
     });
 
