@@ -5,7 +5,10 @@ use serenity::{
         CommandError,
     },
     model::{
-        id::ChannelId,
+        id::{
+            ChannelId,
+            GuildId,
+        },
         permissions::Permissions,
     },
     utils::Colour,
@@ -13,7 +16,10 @@ use serenity::{
 use utils::{markov, try_resolve_user};
 use diesel;
 use diesel::prelude::*;
-use ::PgConnectionManager;
+use ::{
+    PgConnectionManager,
+    ensure_guild,
+};
 use utils::HistoryIterator;
 use itertools::Itertools;
 use rand::Rng;
@@ -51,15 +57,21 @@ fn set_markov(ctx: &Context, g_id: i64, on: bool) {
 }
 
 
-pub fn check_markov_state(ctx: &Context, g_id: i64) -> bool {
+pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
     use schema::guild::dsl::*;
 
     let pool = extract_pool!(&ctx);
 
-    guild.find(g_id)
-        .select(markov_on)
-        .first(pool)
-        .unwrap() // TODO: if fail, go and generate the guild
+    match guild.find(g_id.0 as i64)
+               .select(markov_on)
+               .first(pool)
+    {
+        Ok(x)  => x,
+        Err(_) => {
+            ensure_guild(&ctx, g_id);
+            false
+        },
+    }
 }
 
 
@@ -135,7 +147,7 @@ fn average_colours(colours: Vec<Colour>) -> Colour {
 command!(markov_cmd(ctx, msg, args) {
     use utils::{names_for_members, and_comma_split};
 
-    if !check_markov_state(&ctx, msg.guild_id().unwrap().0 as i64) {
+    if !check_markov_state(&ctx, msg.guild_id().unwrap()) {
         void!(msg.channel_id.say("You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
         return Ok(());
     }

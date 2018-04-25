@@ -78,7 +78,7 @@ impl EventHandler for Handler {
         use models::NewStoredMessage;
 
         let g_id = match msg.guild_id() {
-            Some(id) => id.0 as i64,
+            Some(id) => id,
             None     => return,
         };
 
@@ -94,7 +94,7 @@ impl EventHandler for Handler {
 
         let to_insert = NewStoredMessage {
             id: msg.id.0 as i64,
-            guild_id: g_id,
+            guild_id: g_id.0 as i64,
             user_id: msg.author.id.0 as i64,
             msg: &msg.content,
             created_at: &msg.timestamp.naive_utc(),
@@ -109,7 +109,6 @@ impl EventHandler for Handler {
     fn guild_create(&self, ctx: Context, guild: Guild, _new: bool) {
         // use schema::{guild, prefix};
         use schema;
-        use models::{NewGuild, NewPrefix};
         use diesel::dsl::exists;
 
         let pool = extract_pool!(&ctx);
@@ -126,27 +125,37 @@ impl EventHandler for Handler {
 
         info!(target: "bot", "Joined guild: {}", guild.name);
 
-        let new_guild = NewGuild {
-            id: guild.id.0 as i64,
-        };
-
-        let default_prefix = NewPrefix {
-            guild_id: guild.id.0 as i64,
-            pre: "#!",
-        };
-
-        diesel::insert_into(schema::guild::table)
-            .values(&new_guild)
-            .on_conflict_do_nothing()
-            .execute(pool)
-            .expect("Couldn't create guild");
-
-        diesel::insert_into(schema::prefix::table)
-            .values(&default_prefix)
-            .on_conflict_do_nothing()
-            .execute(pool)
-            .expect("Couldn't create default prefix");
+        ensure_guild(&ctx, guild.id);
     }
+}
+
+
+fn ensure_guild(ctx: &Context, g_id: GuildId) {
+    use schema;
+    use models::{NewGuild, NewPrefix};
+
+    let pool = extract_pool!(&ctx);
+
+    let new_guild = NewGuild {
+        id: g_id.0 as i64,
+    };
+
+    let default_prefix = NewPrefix {
+        guild_id: g_id.0 as i64,
+        pre: "#!",
+    };
+
+    diesel::insert_into(schema::guild::table)
+        .values(&new_guild)
+        .on_conflict_do_nothing()
+        .execute(pool)
+        .expect("Couldn't create guild");
+
+    diesel::insert_into(schema::prefix::table)
+        .values(&default_prefix)
+        .on_conflict_do_nothing()
+        .execute(pool)
+        .expect("Couldn't create default prefix");
 }
 
 
