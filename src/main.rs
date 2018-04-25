@@ -77,6 +77,9 @@ impl EventHandler for Handler {
         use schema::message;
         use models::NewStoredMessage;
 
+        if !commands::markov::message_filter(&msg) {
+            return;
+        }
 
         let g_id = match msg.guild_id() {
             Some(id) => id,
@@ -90,8 +93,6 @@ impl EventHandler for Handler {
         if !commands::markov::check_markov_state(&ctx, g_id) {
             return;
         }
-
-        debug!(target: "bot", "Starting msg insert");
 
         let pool = extract_pool!(&ctx);
 
@@ -107,8 +108,6 @@ impl EventHandler for Handler {
             .values(&to_insert)
             .execute(pool)
             .expect("Couldn't insert message.");
-
-        debug!(target: "bot", "Ending msg insert");
     }
 
     fn guild_create(&self, ctx: Context, guild: Guild, _new: bool) {

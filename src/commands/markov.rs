@@ -9,6 +9,7 @@ use serenity::{
             ChannelId,
             GuildId,
         },
+        channel::Message,
         permissions::Permissions,
     },
     utils::Colour,
@@ -107,6 +108,32 @@ fn drop_messages(ctx: &Context, g_id: i64) {
 }
 
 
+pub fn message_filter(msg: &Message) -> bool {
+
+    if msg.author.bot {
+        return false;
+    }
+
+    // nonzero length
+    if !(msg.content.len() > 0) {
+        return false;
+    }
+
+    // atleast half is alphanumeric
+    if msg.content.chars().filter(|&c| c.is_alphanumeric()).count()
+        < (msg.content.len() / 2) {
+            return false;
+    }
+
+    // atleast 4 spaces
+    if msg.content.chars().filter(|&c| c == ' ').count() < 4 {
+        return false;
+    }
+
+    return true;
+}
+
+
 fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
     use schema::message;
     use models::NewStoredMessage;
@@ -119,15 +146,7 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
     let mut count: usize = 0;
 
     for chunk in messages {
-        let messages: Vec<_> = chunk
-            .filter(|m| !m.author.bot)
-            // nonzero length
-            .filter(|m| m.content.len() > 0)
-            // atleast half is alphanumeric
-            .filter(|m| (m.content.chars().filter(|&c| c.is_alphanumeric()).count() > (m.content.len()) / 2))
-            // atleast 4 spaces
-            .filter(|m| m.content.chars().filter(|&c| c == ' ').count() >= 4)
-            .collect();
+        let messages: Vec<_> = chunk.filter(message_filter).collect();
 
         count += messages.len();
 
