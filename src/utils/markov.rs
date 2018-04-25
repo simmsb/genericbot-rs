@@ -68,7 +68,7 @@ impl<'a> MChain<'a> {
         *entry.entry(val).or_insert(0) += 1;
     }
 
-    pub fn generate_string(&self, limit: usize) -> Option<String> {
+    pub fn generate_string(&self, limit: usize, minimum: usize) -> Option<String> {
         use rand::distributions::{Weighted, WeightedChoice, IndependentSample};
 
         let mut res = String::new();
@@ -94,6 +94,10 @@ impl<'a> MChain<'a> {
         }
 
         if res.is_empty() {
+            return None;
+        }
+
+        if res.chars().filter(|&c| c == ' ').count() < minimum {
             return None;
         }
 

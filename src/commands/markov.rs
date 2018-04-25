@@ -48,7 +48,7 @@ fn get_messages(ctx: &Context, g_id: i64, u_ids: Vec<i64>) -> Vec<String> {
         .filter(guild_id.eq(g_id))
         .select(msg)
         .order(RANDOM)
-        .limit(1000)
+        .limit(7000)
         .load(pool)
         .expect("Error getting messages from DB")
 }
@@ -120,7 +120,13 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
 
     for chunk in messages {
         let messages: Vec<_> = chunk
-            .filter(|m| m.content.len() >= 40)
+            .filter(|m| !m.author.bot)
+            // nonzero length
+            .filter(|m| m.content.len() > 0)
+            // atleast half is alphanumeric
+            .filter(|m| (m.content.chars().filter(|&c| c.is_alphanumeric()).count() > (m.content.len()) / 2))
+            // atleast 4 spaces
+            .filter(|m| m.content.chars().filter(|&c| c == ' ').count() >= 4)
             .collect();
 
         count += messages.len();
@@ -186,7 +192,15 @@ command!(markov_cmd(ctx, msg, args) {
             || {
                 msg.guild_id().unwrap().find().and_then(|g| {
                     let guild = g.read();
-                    let member_ids: Vec<_> = guild.members.keys().collect();
+                    let member_ids: Vec<_> = guild.members
+                                                  .keys()
+                                                  .filter(|u| // no bots thanks
+                                                      match u.find() {
+                                                          Some(user) => !user.read().bot,
+                                                          None       => false,
+                                                      }
+                                                  )
+                                                  .collect();
                     let &&member_id = rand::thread_rng()
                         .choose(&member_ids)?;
                     guild.member(member_id).ok().map(|m| vec![m.clone()])
@@ -214,8 +228,8 @@ command!(markov_cmd(ctx, msg, args) {
 
     let col = average_colours(colours);
 
-    for _ in 0..10 { // try 10 times
-        if let Some(generated) = chain.generate_string(40) {
+    for _ in 0..20 { // try 20 times
+        if let Some(generated) = chain.generate_string(50, 4) {
             msg.channel_id.send_message(
                 |m| m.embed(
                     |e| e
