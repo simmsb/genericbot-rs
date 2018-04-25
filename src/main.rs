@@ -193,7 +193,7 @@ struct PrefixCache;
 
 impl Key for PrefixCache {
     // Jesus christ
-    type Value = Arc<Mutex<LruCache<GuildId, Arc<RwLock<Vec<String>>>>>>;
+    type Value = LruCache<GuildId, Arc<RwLock<Vec<String>>>>;
 }
 
 struct ThreadPoolCache;
@@ -208,22 +208,29 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
 
     if let Some(g_id) = m.guild_id() {
 
-        let data = ctx.data.lock();
-        let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
-        let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-
-        if let Some(val) = cache.get_mut(&g_id) {
-            return Some(val.clone());
+        let mut data = ctx.data.lock();
+        {
+            let mut cache = data.get_mut::<PrefixCache>().unwrap();
+            if let Some(val) = cache.get_mut(&g_id) {
+                return Some(val.clone());
+            }
         }
 
-        let prefixes = prefix
-            .filter(guild_id.eq(g_id.0 as i64))
-            .select(pre)
-            .load::<String>(pool)
-            .expect("Error loading prefixes");
-        let prefixes = Arc::new(RwLock::new(prefixes));
-        cache.insert(g_id, prefixes.clone());
-        Some(prefixes.clone())
+        let prefixes = {
+            let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+            prefix
+                .filter(guild_id.eq(g_id.0 as i64))
+                .select(pre)
+                .load::<String>(pool)
+                .expect("Error loading prefixes")
+        };
+
+        {
+            let mut cache = data.get_mut::<PrefixCache>().unwrap();
+            let prefixes = Arc::new(RwLock::new(prefixes));
+            cache.insert(g_id, prefixes.clone());
+            Some(prefixes.clone())
+        }
     } else {
         None
     }
@@ -439,7 +446,7 @@ fn main() {
         data.insert::<PgConnectionManager>(pool);
         data.insert::<StartTime>(chrono::Utc::now().naive_utc());
         data.insert::<CmdCounter>(Arc::new(RwLock::new(0)));
-        data.insert::<PrefixCache>(Arc::new(Mutex::new(LruCache::new(100))));
+        data.insert::<PrefixCache>(LruCache::new(1000));
         data.insert::<ThreadPoolCache>(Arc::new(Mutex::new(client.threadpool.clone())));
     }
 

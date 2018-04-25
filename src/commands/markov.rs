@@ -24,6 +24,16 @@ use utils::HistoryIterator;
 use itertools::Itertools;
 use rand::Rng;
 use rand;
+use typemap::Key;
+use std::sync::atomic;
+use lru_cache::LruCache;
+
+
+struct MarkovStateCache;
+
+impl Key for MarkovStateCache {
+    type Value = LruCache<GuildId, atomic::AtomicBool>;
+}
 
 
 fn get_messages(ctx: &Context, g_id: i64, u_ids: Vec<i64>) -> Vec<String> {
@@ -60,18 +70,32 @@ fn set_markov(ctx: &Context, g_id: i64, on: bool) {
 pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
     use schema::guild::dsl::*;
 
-    let pool = extract_pool!(&ctx);
+    let mut data = ctx.data.lock();
 
-    match guild.find(g_id.0 as i64)
-               .select(markov_on)
-               .first(pool)
     {
-        Ok(x)  => x,
-        Err(_) => {
-            ensure_guild(&ctx, g_id);
-            false
-        },
+        let cache = data.get_mut::<MarkovStateCache>().unwrap();
+        if let Some(val) = cache.get_mut(&g_id) {
+            return val.load(atomic::Ordering::Relaxed);
+        }
     }
+
+    let state = {
+        let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+        match guild.find(g_id.0 as i64)
+                .select(markov_on)
+                .first(pool)
+        {
+            Ok(x)  => x,
+            Err(_) => {
+                ensure_guild(&ctx, g_id);
+                false
+            },
+        }
+    };
+
+    let cache = data.get_mut::<MarkovStateCache>().unwrap();
+    cache.insert(g_id, atomic::AtomicBool::new(state));
+    return state;
 }
 
 
@@ -230,7 +254,12 @@ command!(fill_markov(ctx, msg) {
 });
 
 
-pub fn setup_markov(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
+pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFramework {
+    {
+        let mut data = client.data.lock();
+        data.insert::<MarkovStateCache>(LruCache::new(1000));
+    }
+
     frame.group("Markov",
                 |g| g
                 .guild_only(true)
