@@ -137,6 +137,7 @@ pub fn message_filter(msg: &Message) -> bool {
 fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
     use schema::message;
     use models::NewStoredMessage;
+    use std::{thread, time};
 
     let iterator = HistoryIterator::new(c_id).chunks(100);
     let messages = iterator.into_iter().take(40);
@@ -147,6 +148,9 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
 
     for chunk in messages {
         let messages: Vec<_> = chunk.filter(message_filter).collect();
+
+        // manual sleep here because discord likes to global rl us
+        thread::sleep(time::Duration::from_secs(20));
 
         count += messages.len();
 
