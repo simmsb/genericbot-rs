@@ -63,15 +63,20 @@ pub fn background_task(ctx: &Context) {
                 }});
     });
 
-    let pool = ctx.data.lock().get::<PgConnectionManager>().unwrap().clone();
-    let delay_period = Duration::seconds(10);
     REMINDER_START.call_once(|| {
         use schema::reminder;
         use diesel::prelude::*;
         use diesel;
 
+        let pool = {
+            let lock = ctx.data.lock();
+            lock.get::<PgConnectionManager>().unwrap().clone()
+        };
+        let delay_period = Duration::seconds(10);
+
         thread::spawn(
             move || loop {
+                debug!(target: "bot", "Reminder loop");
 
                 let time_limit = Utc::now().naive_utc() + delay_period;
 

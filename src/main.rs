@@ -30,7 +30,6 @@ extern crate threadpool;
 extern crate simplelog;
 
 use serenity::{
-    CACHE,
     prelude::*,
     model::{
         guild::Guild,
@@ -39,7 +38,8 @@ use serenity::{
         gateway::{Ready, Game},
     },
     client::bridge::gateway::{ShardManager},
-    framework::standard::StandardFramework
+    framework::standard::StandardFramework,
+    utils::with_cache,
 };
 
 use diesel::{
@@ -77,6 +77,7 @@ impl EventHandler for Handler {
         use schema::message;
         use models::NewStoredMessage;
 
+
         let g_id = match msg.guild_id() {
             Some(id) => id,
             None     => return,
@@ -89,6 +90,8 @@ impl EventHandler for Handler {
         if !commands::markov::check_markov_state(&ctx, g_id) {
             return;
         }
+
+        debug!(target: "bot", "Starting msg insert");
 
         let pool = extract_pool!(&ctx);
 
@@ -104,6 +107,8 @@ impl EventHandler for Handler {
             .values(&to_insert)
             .execute(pool)
             .expect("Couldn't insert message.");
+
+        debug!(target: "bot", "Ending msg insert");
     }
 
     fn guild_create(&self, ctx: Context, guild: Guild, _new: bool) {
@@ -216,7 +221,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
             }
         }
 
-        let prefixes = {
+        let mut prefixes = {
             let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
             prefix
                 .filter(guild_id.eq(g_id.0 as i64))
@@ -224,6 +229,8 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
                 .load::<String>(pool)
                 .expect("Error loading prefixes")
         };
+
+        prefixes.push("generic#".to_owned());
 
         {
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
@@ -273,7 +280,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                     format!("This command requires permissions: {:?}", perms),
                 _ => return,
             };
-            let _ = msg.channel_id.say(&s);
+            void!(msg.channel_id.say(&s));
         })
          .after(| ctx, msg, _, err | {
              use schema::guild::dsl::*;
@@ -295,13 +302,13 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                              .unwrap();
                      }
                  }
-                 Err(e) => { let _ = msg.channel_id.say(e.0); },
+                 Err(e) => void!(msg.channel_id.say(e.0)),
              }
          })
         .configure(|c| c
                    .allow_whitespace(true)
                    .dynamic_prefixes(get_prefixes)
-                   .prefix("--")
+                   .prefix("generic#")
                    .owners(owners))
         .customised_help(help_commands::plain, |c| c
                          .individual_command_tip(
@@ -313,12 +320,12 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
             use schema::guild::dsl::*;
             use schema::tag::dsl::*;
 
-            let pool = extract_pool!(&ctx);
-
             let g_id = match msg.guild_id() {
                 Some(x) => x.0 as i64,
                 None    => return,
             };
+
+            let pool = extract_pool!(&ctx);
 
             let has_auto_tags = guild
                 .find(&g_id)
@@ -341,12 +348,13 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 
 
 pub fn log_message(msg: &str) {
-    use serenity::model::channel::Channel::Guild;
-
     let chan_id = dotenv::var("DISCORD_BOT_LOG_CHAN").unwrap().parse::<u64>().unwrap();
-    if let Some(Guild(chan)) = CACHE.read().channel(chan_id) {
-        void!(chan.read().say(msg));
-    }
+
+    with_cache(|c| {
+        if let Some(chan) = c.guild_channel(chan_id) {
+            void!(chan.read().say(msg));
+        }
+    });
 }
 
 
@@ -411,7 +419,7 @@ impl SharedLogger for DiscordLogger {
 fn main() {
     CombinedLogger::init(
         vec![
-            SimpleLogger::new(LevelFilter::Info, Config::default()),
+            SimpleLogger::new(LevelFilter::Debug, Config::default()),
             DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
         ]
     ).unwrap();
