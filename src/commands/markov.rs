@@ -25,14 +25,13 @@ use itertools::Itertools;
 use rand::Rng;
 use rand;
 use typemap::Key;
-use std::sync::atomic;
 use lru_cache::LruCache;
 
 
 struct MarkovStateCache;
 
 impl Key for MarkovStateCache {
-    type Value = LruCache<GuildId, atomic::AtomicBool>;
+    type Value = LruCache<GuildId, bool>;
 }
 
 
@@ -75,7 +74,7 @@ pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
     {
         let cache = data.get_mut::<MarkovStateCache>().unwrap();
         if let Some(val) = cache.get_mut(&g_id) {
-            return val.load(atomic::Ordering::Relaxed);
+            return *val;
         }
     }
 
@@ -94,7 +93,7 @@ pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
     };
 
     let cache = data.get_mut::<MarkovStateCache>().unwrap();
-    cache.insert(g_id, atomic::AtomicBool::new(state));
+    cache.insert(g_id, state);
     return state;
 }
 
