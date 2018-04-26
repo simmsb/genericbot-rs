@@ -50,7 +50,7 @@ command!(status_cmd(ctx, msg) {
 
     let (g_c, c_c, u_c, s_c) = with_cache(
         |c| {
-            let g_c = c.guilds.len();
+            let g_c = c.all_guilds().len();
             let c_c = c.channels.len();
             let u_c = c.users.len();
             let s_c = c.shard_count;

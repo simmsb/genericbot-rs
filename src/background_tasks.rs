@@ -26,9 +26,13 @@ pub fn background_task(ctx: &Context) {
     BOTLIST_UPDATE_START.call_once(|| {
         thread::spawn(
             move || {
+                info!(target: "bot", "Starting botlist updater process");
                 let botlist_key = match dotenv::var("DISCORD_BOT_LIST_TOKEN") {
                     Ok(x) => x.to_owned(),
-                    _     => return,
+                    _     => {
+                        warn!(target: "bot", "No botlist token set");
+                        return;
+                    },
                 };
 
                 let bot_id = utils::with_cache(|c| c.user.id);
@@ -41,26 +45,38 @@ pub fn background_task(ctx: &Context) {
 
                 loop {
                     thread::sleep(time::Duration::from_secs(60 * 60));  // every hour
-
                     {
                         let guild_count = utils::with_cache(|c| c.all_guilds().len());
 
-                        let _ = client.post(&format!("https://bots.discord.pw/api/bots/{}/stats", bot_id))
-                                      .body(format!(r#"{{"server_count": {}}}"#, guild_count))
-                                      .send();
+                        info!(target: "bot", "Sent update to botlist, with count: {}", guild_count);
+
+                        let resp = client.post(&format!("https://bots.discord.pw/api/bots/{}/stats", bot_id))
+                                         .json(&json!({
+                                             "server_count": guild_count
+                                         }))
+                                         .send();
+
+                        if let Ok(mut resp) = resp {
+                            info!(target: "bot", "Response from botlist. status: {}, body: {:?}", resp.status(), resp.text());
+                        }
                     }
                 }});
     });
 
-    let pool = ctx.data.lock().get::<PgConnectionManager>().unwrap().clone();
-    let delay_period = Duration::seconds(10);
     REMINDER_START.call_once(|| {
         use schema::reminder;
         use diesel::prelude::*;
         use diesel;
 
+        let pool = {
+            let lock = ctx.data.lock();
+            lock.get::<PgConnectionManager>().unwrap().clone()
+        };
+        let delay_period = Duration::seconds(10);
+
         thread::spawn(
             move || loop {
+                debug!(target: "bot", "Reminder loop");
 
                 let time_limit = Utc::now().naive_utc() + delay_period;
 
@@ -71,6 +87,10 @@ pub fn background_task(ctx: &Context) {
                     .order(reminder::dsl::when)
                     .load::<Reminder>(pool)
                 {
+                    if !reminders.is_empty() {
+                        info!(target: "bot", "Collected {} reminders.", reminders.len());
+                    }
+
                     for rem in reminders {
                         let diff = rem.when.signed_duration_since(Utc::now().naive_utc());
                         let diff = match diff.to_std() {

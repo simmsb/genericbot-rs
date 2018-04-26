@@ -27,9 +27,9 @@ extern crate whirlpool;
 extern crate reqwest;
 extern crate lru_cache;
 extern crate threadpool;
+extern crate simplelog;
 
 use serenity::{
-    CACHE,
     prelude::*,
     model::{
         guild::Guild,
@@ -38,7 +38,8 @@ use serenity::{
         gateway::{Ready, Game},
     },
     client::bridge::gateway::{ShardManager},
-    framework::standard::StandardFramework
+    framework::standard::StandardFramework,
+    utils::with_cache,
 };
 
 use diesel::{
@@ -51,6 +52,8 @@ use std::sync::Arc;
 use typemap::Key;
 use lru_cache::LruCache;
 use threadpool::ThreadPool;
+use log::{LevelFilter, Metadata, Record, Log};
+use simplelog::*;
 
 
 struct Handler;
@@ -60,7 +63,7 @@ impl EventHandler for Handler {
         use background_tasks;
 
         if let Some(shard) = ready.shard {
-            println!("Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
+            info!(target: "bot", "Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
 
             ctx.set_game(Game::playing(&format!("Little generic bot | #!help | Shard {}", shard[0])));
         }
@@ -74,8 +77,12 @@ impl EventHandler for Handler {
         use schema::message;
         use models::NewStoredMessage;
 
+        if !commands::markov::message_filter(&msg) {
+            return;
+        }
+
         let g_id = match msg.guild_id() {
-            Some(id) => id.0 as i64,
+            Some(id) => id,
             None     => return,
         };
 
@@ -91,7 +98,7 @@ impl EventHandler for Handler {
 
         let to_insert = NewStoredMessage {
             id: msg.id.0 as i64,
-            guild_id: g_id,
+            guild_id: g_id.0 as i64,
             user_id: msg.author.id.0 as i64,
             msg: &msg.content,
             created_at: &msg.timestamp.naive_utc(),
@@ -103,33 +110,56 @@ impl EventHandler for Handler {
             .expect("Couldn't insert message.");
     }
 
-    fn guild_create(&self, ctx: Context, guild: Guild, _: bool) {
-        use schema::{guild, prefix};
-        use models::{NewGuild, NewPrefix};
+    fn guild_create(&self, ctx: Context, guild: Guild, _new: bool) {
+        // use schema::{guild, prefix};
+        use schema;
+        use diesel::dsl::exists;
 
         let pool = extract_pool!(&ctx);
 
-        let new_guild = NewGuild {
-            id: guild.id.0 as i64,
-        };
+        let guild_known: bool = diesel::select(exists(
+            schema::guild::table
+                .find(guild.id.0 as i64)))
+            .get_result(pool)
+            .expect("Failed to check guild existence");
 
-        let default_prefix = NewPrefix {
-            guild_id: guild.id.0 as i64,
-            pre: "#!",
-        };
+        if guild_known {
+            return;
+        }
 
-        diesel::insert_into(guild::table)
-            .values(&new_guild)
-            .on_conflict_do_nothing()
-            .execute(pool)
-            .expect("Couldn't create guild");
+        info!(target: "bot", "Joined guild: {}", guild.name);
 
-        diesel::insert_into(prefix::table)
-            .values(&default_prefix)
-            .on_conflict_do_nothing()
-            .execute(pool)
-            .expect("Couldn't create default prefix");
+        ensure_guild(&ctx, guild.id);
     }
+}
+
+
+fn ensure_guild(ctx: &Context, g_id: GuildId) {
+    use schema;
+    use models::{NewGuild, NewPrefix};
+
+    let pool = extract_pool!(&ctx);
+
+    let new_guild = NewGuild {
+        id: g_id.0 as i64,
+    };
+
+    let default_prefix = NewPrefix {
+        guild_id: g_id.0 as i64,
+        pre: "#!",
+    };
+
+    diesel::insert_into(schema::guild::table)
+        .values(&new_guild)
+        .on_conflict_do_nothing()
+        .execute(pool)
+        .expect("Couldn't create guild");
+
+    diesel::insert_into(schema::prefix::table)
+        .values(&default_prefix)
+        .on_conflict_do_nothing()
+        .execute(pool)
+        .expect("Couldn't create default prefix");
 }
 
 
@@ -167,7 +197,7 @@ struct PrefixCache;
 
 impl Key for PrefixCache {
     // Jesus christ
-    type Value = Arc<Mutex<LruCache<GuildId, Arc<RwLock<Vec<String>>>>>>;
+    type Value = LruCache<GuildId, Arc<RwLock<Vec<String>>>>;
 }
 
 struct ThreadPoolCache;
@@ -182,22 +212,31 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
 
     if let Some(g_id) = m.guild_id() {
 
-        let data = ctx.data.lock();
-        let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
-        let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-
-        if let Some(val) = cache.get_mut(&g_id) {
-            return Some(val.clone());
+        let mut data = ctx.data.lock();
+        {
+            let mut cache = data.get_mut::<PrefixCache>().unwrap();
+            if let Some(val) = cache.get_mut(&g_id) {
+                return Some(val.clone());
+            }
         }
 
-        let prefixes = prefix
-            .filter(guild_id.eq(g_id.0 as i64))
-            .select(pre)
-            .load::<String>(pool)
-            .expect("Error loading prefixes");
-        let prefixes = Arc::new(RwLock::new(prefixes));
-        cache.insert(g_id, prefixes.clone());
-        Some(prefixes.clone())
+        let mut prefixes = {
+            let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+            prefix
+                .filter(guild_id.eq(g_id.0 as i64))
+                .select(pre)
+                .load::<String>(pool)
+                .expect("Error loading prefixes")
+        };
+
+        prefixes.push("generic#".to_owned());
+
+        {
+            let mut cache = data.get_mut::<PrefixCache>().unwrap();
+            let prefixes = Arc::new(RwLock::new(prefixes));
+            cache.insert(g_id, prefixes.clone());
+            Some(prefixes.clone())
+        }
     } else {
         None
     }
@@ -228,7 +267,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 
     frame
         .on_dispatch_error(| _, msg, err | {
-            println!("handling error: {:?}", err);
+            debug!(target: "bot", "handling error: {:?}", err);
             let s = match err {
                 OnlyForGuilds =>
                     "This command can only be used in private messages.".to_string(),
@@ -240,7 +279,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                     format!("This command requires permissions: {:?}", perms),
                 _ => return,
             };
-            let _ = msg.channel_id.say(&s);
+            void!(msg.channel_id.say(&s));
         })
          .after(| ctx, msg, _, err | {
              use schema::guild::dsl::*;
@@ -262,13 +301,13 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                              .unwrap();
                      }
                  }
-                 Err(e) => { let _ = msg.channel_id.say(e.0); },
+                 Err(e) => void!(msg.channel_id.say(e.0)),
              }
          })
         .configure(|c| c
                    .allow_whitespace(true)
                    .dynamic_prefixes(get_prefixes)
-                   .prefix("--")
+                   .prefix("generic#")
                    .owners(owners))
         .customised_help(help_commands::plain, |c| c
                          .individual_command_tip(
@@ -280,12 +319,12 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
             use schema::guild::dsl::*;
             use schema::tag::dsl::*;
 
-            let pool = extract_pool!(&ctx);
-
             let g_id = match msg.guild_id() {
                 Some(x) => x.0 as i64,
                 None    => return,
             };
+
+            let pool = extract_pool!(&ctx);
 
             let has_auto_tags = guild
                 .find(&g_id)
@@ -307,17 +346,83 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 }
 
 
-pub fn log_message(msg: &String) {
-    use serenity::model::channel::Channel::Guild;
-
+pub fn log_message(msg: &str) {
     let chan_id = dotenv::var("DISCORD_BOT_LOG_CHAN").unwrap().parse::<u64>().unwrap();
-    if let Some(Guild(chan)) = CACHE.read().channel(chan_id) {
-        chan.read().say(msg).unwrap();
+
+    with_cache(|c| {
+        if let Some(chan) = c.guild_channel(chan_id) {
+            void!(chan.read().say(msg));
+        }
+    });
+}
+
+
+struct DiscordLogger {
+    level: LevelFilter,
+    config: Config,
+    filter_target: String,
+}
+
+
+impl DiscordLogger {
+    // fn init(log_level: LevelFilter, config: Config) -> Result<(), SetLoggerError> {
+    //     set_max_level(log_level.clone());
+    //     set_boxed_logger(DiscordLogger::new(log_level, config))
+    // }
+
+    fn new(log_level: LevelFilter, config: Config, filter_target: &str) -> Box<DiscordLogger> {
+        Box::new(DiscordLogger { level: log_level, config: config, filter_target: filter_target.to_owned() })
+    }
+}
+
+
+impl Log for DiscordLogger {
+
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= self.level
+    }
+
+    fn log(&self, record: &Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+
+        if self.filter_target != record.target() {
+            return;
+        }
+
+        log_message(&format!("LOG: {}:{} -- {}", record.level(), record.target(), record.args()));
+    }
+
+    fn flush(&self) {
+    }
+}
+
+
+impl SharedLogger for DiscordLogger {
+    fn level(&self) -> LevelFilter {
+        self.level
+    }
+
+    fn config(&self) -> Option<&Config>
+    {
+        Some(&self.config)
+    }
+
+    fn as_log(self: Box<Self>) -> Box<Log> {
+        Box::new(*self)
     }
 }
 
 
 fn main() {
+    CombinedLogger::init(
+        vec![
+            SimpleLogger::new(LevelFilter::Debug, Config::default()),
+            DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
+        ]
+    ).unwrap();
+
     let token = dotenv::var("DISCORD_BOT_TOKEN").unwrap();
     let db_url = dotenv::var("DISCORD_BOT_DB").unwrap();
 
@@ -348,10 +453,9 @@ fn main() {
         data.insert::<PgConnectionManager>(pool);
         data.insert::<StartTime>(chrono::Utc::now().naive_utc());
         data.insert::<CmdCounter>(Arc::new(RwLock::new(0)));
-        data.insert::<PrefixCache>(Arc::new(Mutex::new(LruCache::new(100))));
+        data.insert::<PrefixCache>(LruCache::new(1000));
         data.insert::<ThreadPoolCache>(Arc::new(Mutex::new(client.threadpool.clone())));
     }
-
 
     if let Err(why) = client.start_autosharded() {
         println!("AAA: {:?}", why);

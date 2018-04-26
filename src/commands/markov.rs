@@ -5,7 +5,11 @@ use serenity::{
         CommandError,
     },
     model::{
-        id::ChannelId,
+        id::{
+            ChannelId,
+            GuildId,
+        },
+        channel::Message,
         permissions::Permissions,
     },
     utils::Colour,
@@ -13,11 +17,23 @@ use serenity::{
 use utils::{markov, try_resolve_user};
 use diesel;
 use diesel::prelude::*;
-use ::PgConnectionManager;
+use ::{
+    PgConnectionManager,
+    ensure_guild,
+};
 use utils::HistoryIterator;
 use itertools::Itertools;
 use rand::Rng;
 use rand;
+use typemap::Key;
+use lru_cache::LruCache;
+
+
+struct MarkovStateCache;
+
+impl Key for MarkovStateCache {
+    type Value = LruCache<GuildId, bool>;
+}
 
 
 fn get_messages(ctx: &Context, g_id: i64, u_ids: Vec<i64>) -> Vec<String> {
@@ -33,7 +49,7 @@ fn get_messages(ctx: &Context, g_id: i64, u_ids: Vec<i64>) -> Vec<String> {
         .filter(guild_id.eq(g_id))
         .select(msg)
         .order(RANDOM)
-        .limit(1000)
+        .limit(7000)
         .load(pool)
         .expect("Error getting messages from DB")
 }
@@ -51,15 +67,35 @@ fn set_markov(ctx: &Context, g_id: i64, on: bool) {
 }
 
 
-pub fn check_markov_state(ctx: &Context, g_id: i64) -> bool {
+pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
     use schema::guild::dsl::*;
 
-    let pool = extract_pool!(&ctx);
+    let mut data = ctx.data.lock();
 
-    guild.find(g_id)
-        .select(markov_on)
-        .first(pool)
-        .unwrap() // TODO: if fail, go and generate the guild
+    {
+        let cache = data.get_mut::<MarkovStateCache>().unwrap();
+        if let Some(val) = cache.get_mut(&g_id) {
+            return *val;
+        }
+    }
+
+    let state = {
+        let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+        match guild.find(g_id.0 as i64)
+                .select(markov_on)
+                .first(pool)
+        {
+            Ok(x)  => x,
+            Err(_) => {
+                ensure_guild(&ctx, g_id);
+                false
+            },
+        }
+    };
+
+    let cache = data.get_mut::<MarkovStateCache>().unwrap();
+    cache.insert(g_id, state);
+    return state;
 }
 
 
@@ -72,9 +108,36 @@ fn drop_messages(ctx: &Context, g_id: i64) {
 }
 
 
+pub fn message_filter(msg: &Message) -> bool {
+
+    if msg.author.bot {
+        return false;
+    }
+
+    // nonzero length
+    if !(msg.content.len() > 0) {
+        return false;
+    }
+
+    // atleast half is alphanumeric
+    if msg.content.chars().filter(|&c| c.is_alphanumeric()).count()
+        < (msg.content.len() / 2) {
+            return false;
+    }
+
+    // atleast 4 spaces
+    if msg.content.chars().filter(|&c| c == ' ').count() < 4 {
+        return false;
+    }
+
+    return true;
+}
+
+
 fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
     use schema::message;
     use models::NewStoredMessage;
+    use std::{thread, time};
 
     let iterator = HistoryIterator::new(c_id).chunks(100);
     let messages = iterator.into_iter().take(40);
@@ -84,9 +147,10 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
     let mut count: usize = 0;
 
     for chunk in messages {
-        let messages: Vec<_> = chunk
-            .filter(|m| m.content.len() >= 40)
-            .collect();
+        let messages: Vec<_> = chunk.filter(message_filter).collect();
+
+        // manual sleep here because discord likes to global rl us
+        thread::sleep(time::Duration::from_secs(20));
 
         count += messages.len();
 
@@ -135,7 +199,7 @@ fn average_colours(colours: Vec<Colour>) -> Colour {
 command!(markov_cmd(ctx, msg, args) {
     use utils::{names_for_members, and_comma_split};
 
-    if !check_markov_state(&ctx, msg.guild_id().unwrap().0 as i64) {
+    if !check_markov_state(&ctx, msg.guild_id().unwrap()) {
         void!(msg.channel_id.say("You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
         return Ok(());
     }
@@ -151,7 +215,15 @@ command!(markov_cmd(ctx, msg, args) {
             || {
                 msg.guild_id().unwrap().find().and_then(|g| {
                     let guild = g.read();
-                    let member_ids: Vec<_> = guild.members.keys().collect();
+                    let member_ids: Vec<_> = guild.members
+                                                  .keys()
+                                                  .filter(|u| // no bots thanks
+                                                      match u.find() {
+                                                          Some(user) => !user.read().bot,
+                                                          None       => false,
+                                                      }
+                                                  )
+                                                  .collect();
                     let &&member_id = rand::thread_rng()
                         .choose(&member_ids)?;
                     guild.member(member_id).ok().map(|m| vec![m.clone()])
@@ -179,8 +251,8 @@ command!(markov_cmd(ctx, msg, args) {
 
     let col = average_colours(colours);
 
-    for _ in 0..10 { // try 10 times
-        if let Some(generated) = chain.generate_string(40) {
+    for _ in 0..20 { // try 20 times
+        if let Some(generated) = chain.generate_string(50, 4) {
             msg.channel_id.send_message(
                 |m| m.embed(
                     |e| e
@@ -218,7 +290,12 @@ command!(fill_markov(ctx, msg) {
 });
 
 
-pub fn setup_markov(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
+pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFramework {
+    {
+        let mut data = client.data.lock();
+        data.insert::<MarkovStateCache>(LruCache::new(1000));
+    }
+
     frame.group("Markov",
                 |g| g
                 .guild_only(true)

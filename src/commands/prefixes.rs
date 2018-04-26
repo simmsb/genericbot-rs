@@ -18,13 +18,15 @@ use ::PrefixCache;
 fn delete_prefix(ctx: &Context, p: &str, g_id: GuildId) {
     use schema::prefix::dsl::*;
 
-    let data = ctx.data.lock();
-    let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
-    let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-
-    if let Some(mut pre_vec) = cache.get_mut(&g_id).map(|l| l.write()) {
-        pre_vec.remove_item(&p.to_owned());
+    let mut data = ctx.data.lock();
+    {
+        let cache = data.get_mut::<PrefixCache>().unwrap();
+        if let Some(mut pre_vec) = cache.get_mut(&g_id).map(|l| l.write()) {
+            pre_vec.remove_item(&p.to_owned());
+        }
     }
+
+    let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
 
     diesel::delete(prefix
                    .filter(pre.eq(p))
@@ -38,13 +40,15 @@ fn add_prefix(ctx: &Context, p: &str, g_id: GuildId) {
     use schema::prefix;
     use models::NewPrefix;
 
-    let data = ctx.data.lock();
-    let cache = &mut *data.get::<PrefixCache>().unwrap().lock();
-    let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-
-    if let Some(mut pre_vec) = cache.get_mut(&g_id).map(|l| l.write()) {
-        pre_vec.push(p.to_owned());
+    let mut data = ctx.data.lock();
+    {
+        let cache = data.get_mut::<PrefixCache>().unwrap();
+        if let Some(mut pre_vec) = cache.get_mut(&g_id).map(|l| l.write()) {
+            pre_vec.push(p.to_owned());
+        }
     }
+
+    let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
 
     let pre = NewPrefix {
         guild_id: g_id.0 as i64,
