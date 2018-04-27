@@ -118,6 +118,7 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
     frame.group("Admin",
                 |g| g
                 .owners_only(true)
+                .help_available(false)
                 .command(
                     "set_avatar", |c| c
                         .cmd(set_avatar)
