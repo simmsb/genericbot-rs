@@ -147,10 +147,10 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
     let mut count: usize = 0;
 
     for chunk in messages {
-        let messages: Vec<_> = chunk.filter(message_filter).collect();
-
         // manual sleep here because discord likes to global rl us
-        thread::sleep(time::Duration::from_secs(20));
+        thread::sleep(time::Duration::from_secs(5));
+
+        let messages: Vec<_> = chunk.filter(message_filter).collect();
 
         count += messages.len();
 
@@ -189,7 +189,9 @@ fn average_colours(colours: Vec<Colour>) -> Colour {
     );
 
     let len = colours.len() as f32;
-    let (a_r, a_g, a_b) = (s_r as f32 / len, s_g as f32 / len, s_b as f32 / len);
+    let (a_r, a_g, a_b) = (s_r as f32 / len,
+                           s_g as f32 / len,
+                           s_b as f32 / len);
     let res = (a_r.sqrt() as u8, a_g.sqrt() as u8, a_b.sqrt() as u8);
 
     Colour::from(res)
@@ -280,11 +282,12 @@ command!(markov_enable(ctx, msg) {
 command!(markov_disable(ctx, msg) {
     set_markov(&ctx, msg.guild_id().unwrap().0 as i64, false);
     drop_messages(&ctx, msg.guild_id().unwrap().0 as i64);
-    void!(msg.channel_id.say("Disabled markov chains for this guild."));
+    void!(msg.channel_id.say("Disabled markov chains and dropped messages for this guild."));
 });
 
 
 command!(fill_markov(ctx, msg) {
+    void!(msg.channel_id.say("Adding messages to the chain."));
     let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
     void!(msg.channel_id.say(format!("Inserted {} messages into the chain.", count)));
 });
@@ -312,7 +315,7 @@ pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFr
                 )
                 .command("markov_disable", |c| c
                          .cmd(markov_disable)
-                         .desc("Disable usage of markov chains for this guild.")
+                         .desc("Disable usage of markov chains for this guild.\n This also drops all messages from the chain.")
                          .required_permissions(Permissions::ADMINISTRATOR)
                 )
                 .command("fill_markov", |c| c
