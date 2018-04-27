@@ -5,3 +5,4 @@ pub mod markov;
 pub mod misc;
 pub mod booru;
 pub mod prefixes;
+pub mod gimage;

@@ -418,7 +418,7 @@ impl SharedLogger for DiscordLogger {
 fn main() {
     CombinedLogger::init(
         vec![
-            SimpleLogger::new(LevelFilter::Debug, Config::default()),
+            SimpleLogger::new(LevelFilter::Info, Config::default()),
             DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
         ]
     ).unwrap();
@@ -439,6 +439,7 @@ fn main() {
                       commands::misc::setup_misc,
                       commands::booru::setup_booru,
                       commands::prefixes::setup_prefixes,
+                      commands::gimage::setup_gimage,
                      ];
 
     let framework = setup_fns.iter().fold(
