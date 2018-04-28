@@ -4,7 +4,8 @@
 [![Help Guild](https://img.shields.io/discord/277242136624234498.svg)](https://discord.gg/aV6zGnn)
 
 
-Bot prefix is: `#!`, howerver it can be changed with the command `set_prefix`
+Bot responds to the prefixes: `#!` and `generic#`, prefixes can be added with `add_prefix`
+You can delete the prefix: `#!` however the `generic#` prefix is not removable.
 
 Help output:
 

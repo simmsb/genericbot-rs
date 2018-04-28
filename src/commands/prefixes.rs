@@ -5,6 +5,7 @@ use serenity::{
     prelude::*,
     utils::MessageBuilder,
     model::{
+        permissions::Permissions,
         id::GuildId,
     },
 };
@@ -122,14 +123,16 @@ pub fn setup_prefixes(_client: &mut Client, frame: StandardFramework) -> Standar
                          .desc("Add a prefix")
                          .example("!!")
                          .usage("{prefix}")
+                         .required_permissions(Permissions::ADMINISTRATOR)
                          .num_args(1)
                 )
                 .command("delete_prefix",
                          |c| c
                          .cmd(delete_prefix_cmd)
-                         .desc("Delete a prefix, if it exists")
+                         .desc("Delete a prefix, if it exists. Note you cannot delete the `generic#` prefix.")
                          .example("!!")
                          .usage("{prefix}")
+                         .required_permissions(Permissions::ADMINISTRATOR)
                          .num_args(1)
                 )
     )
