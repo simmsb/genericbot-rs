@@ -65,7 +65,7 @@ impl EventHandler for Handler {
         if let Some(shard) = ready.shard {
             info!(target: "bot", "Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
 
-            ctx.set_game(Game::playing(&format!("Little generic bot | #!help | Shard {}", shard[0])));
+            ctx.set_game(Game::playing(&format!("Little generic bot | generic#help | Shard {}", shard[0])));
         }
 
         background_tasks::background_task(&ctx);
