@@ -272,17 +272,29 @@ command!(markov_cmd(ctx, msg, args) {
 
 
 command!(markov_enable(ctx, msg) {
-    set_markov(&ctx, msg.guild_id().unwrap().0 as i64, true);
-    void!(msg.channel_id.say("Enabled markov chains for this guild, now filling messages..."));
-    let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
-    void!(msg.channel_id.say(format!("Build the markov chain with {} messages", count)));
+    let current_state = check_markov_state(&ctx, msg.guild_id().unwrap());
+
+    if current_state {
+        void!("Markov chains are already enabled here.");
+    } else {
+        set_markov(&ctx, msg.guild_id().unwrap().0 as i64, true);
+        void!(msg.channel_id.say("Enabled markov chains for this guild, now filling messages..."));
+        let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
+        void!(msg.channel_id.say(format!("Build the markov chain with {} messages", count)));
+    }
 });
 
 
 command!(markov_disable(ctx, msg) {
-    set_markov(&ctx, msg.guild_id().unwrap().0 as i64, false);
-    drop_messages(&ctx, msg.guild_id().unwrap().0 as i64);
-    void!(msg.channel_id.say("Disabled markov chains and dropped messages for this guild."));
+    let current_state = check_markov_state(&ctx, msg.guild_id().unwrap());
+
+    if !current_state {
+        void!("Markov chains are already disabled here.");
+    } else {
+        set_markov(&ctx, msg.guild_id().unwrap().0 as i64, false);
+        drop_messages(&ctx, msg.guild_id().unwrap().0 as i64);
+        void!(msg.channel_id.say("Disabled markov chains and dropped messages for this guild."));
+    }
 });
 
 
@@ -299,29 +311,32 @@ pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFr
         data.insert::<MarkovStateCache>(LruCache::new(1000));
     }
 
-    frame.group("Markov",
-                |g| g
-                .guild_only(true)
-                .command("markov", |c| c
-                         .cmd(markov_cmd)
-                         .desc("Generate a markov chain for some users, if not users given: pick a random user")
-                         .example("a_username @a_mention")
-                         .usage("{users...}")
-                )
-                .command("markov_enable", |c| c
-                         .cmd(markov_enable)
-                         .desc("Enable usage of markov chains for this guild.")
-                         .required_permissions(Permissions::ADMINISTRATOR)
-                )
-                .command("markov_disable", |c| c
-                         .cmd(markov_disable)
-                         .desc("Disable usage of markov chains for this guild.\n This also drops all messages from the chain.")
-                         .required_permissions(Permissions::ADMINISTRATOR)
-                )
-                .command("fill_markov", |c| c
-                         .cmd(fill_markov)
-                         .desc("Add messages to the markov chain.")
-                         .required_permissions(Permissions::ADMINISTRATOR)
-                )
+    frame
+        .simple_bucket("markov_fill_bucket", 60 * 60) // once each hour
+        .group("Markov",
+               |g| g
+               .guild_only(true)
+               .command("markov", |c| c
+                        .cmd(markov_cmd)
+                        .desc("Generate a markov chain for some users, if not users given: pick a random user")
+                        .example("a_username @a_mention")
+                        .usage("{users...}")
+               )
+               .command("markov_enable", |c| c
+                        .cmd(markov_enable)
+                        .desc("Enable usage of markov chains for this guild.")
+                        .required_permissions(Permissions::ADMINISTRATOR)
+               )
+               .command("markov_disable", |c| c
+                        .cmd(markov_disable)
+                        .desc("Disable usage of markov chains for this guild.\n This also drops all messages from the chain.")
+                        .required_permissions(Permissions::ADMINISTRATOR)
+               )
+               .command("fill_markov", |c| c
+                        .cmd(fill_markov)
+                        .desc("Add messages to the markov chain.")
+                        .required_permissions(Permissions::ADMINISTRATOR)
+                        .bucket("markov_fill_bucket")
+               )
     )
 }
