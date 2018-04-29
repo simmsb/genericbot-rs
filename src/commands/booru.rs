@@ -433,7 +433,7 @@ pub fn setup_booru(client: &mut Client, frame: StandardFramework) -> StandardFra
     }
 
     frame
-        .bucket("booru_bucket", 1, 10, 4)
+        .bucket("booru_bucket", 3, 10, 2)
         .group("Booru",
                |g| g
                .bucket("booru_bucket")
