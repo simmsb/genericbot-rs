@@ -431,6 +431,8 @@ fn main() {
 
     let mut client = Client::new(&token, Handler).unwrap();
 
+    client.threadpool.set_num_threads(20);
+
     let setup_fns = &[setup,
                       commands::tags::setup_tags,
                       commands::admin::setup_admin,
