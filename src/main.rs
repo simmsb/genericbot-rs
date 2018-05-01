@@ -12,6 +12,7 @@ mod commands;
 #[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 #[macro_use] extern crate serde_json;
+extern crate serde;
 extern crate dotenv;
 extern crate r2d2;
 extern crate r2d2_diesel;
@@ -28,6 +29,7 @@ extern crate reqwest;
 extern crate lru_cache;
 extern crate threadpool;
 extern crate simplelog;
+extern crate rmp_serde;
 
 use serenity::{
     prelude::*,
@@ -49,12 +51,13 @@ use diesel::{
 use r2d2_diesel::ConnectionManager;
 
 use std::sync::Arc;
+use std::os::unix::net::UnixStream;
 use typemap::Key;
 use lru_cache::LruCache;
 use threadpool::ThreadPool;
 use log::{LevelFilter, Metadata, Record, Log};
 use simplelog::*;
-
+use utils::say;
 
 struct Handler;
 
@@ -207,6 +210,16 @@ impl Key for ThreadPoolCache {
 }
 
 
+lazy_static! {
+    pub static ref MESSENGER_SOCKET: Arc<Mutex<UnixStream>> = {
+        let messenger_socket = dotenv::var("DISCORD_BOT_MESSENGER_SOCKET").unwrap();
+        let message_socket = UnixStream::connect(messenger_socket).unwrap();
+        message_socket.shutdown(std::net::Shutdown::Read).unwrap();
+        Arc::new(Mutex::new(message_socket))
+    };
+}
+
+
 fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>>>> {
     use schema::prefix::dsl::*;
 
@@ -266,7 +279,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     };
 
     frame
-        .on_dispatch_error(| _, msg, err | {
+        .on_dispatch_error(| _ctx, msg, err | {
             debug!(target: "bot", "handling error: {:?}", err);
             let s = match err {
                 OnlyForGuilds =>
@@ -279,7 +292,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                     format!("This command requires permissions: {:?}", perms),
                 _ => return,
             };
-            void!(msg.channel_id.say(&s));
+            void!(say(msg.channel_id, &s));
         })
          .after(| ctx, msg, _, err | {
              use schema::guild::dsl::*;
@@ -301,7 +314,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                              .unwrap();
                      }
                  }
-                 Err(e) => void!(msg.channel_id.say(e.0)),
+                 Err(e) => void!(say(msg.channel_id, e.0)),
              }
          })
         .configure(|c| c

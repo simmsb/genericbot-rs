@@ -8,8 +8,13 @@ use serenity::{
         Args,
         CommandOptions,
     },
+    builder::CreateMessage,
 };
 use serenity::prelude::*;
+use serenity;
+use std::fmt::Display;
+use serde_json;
+
 
 #[macro_use]
 pub mod macros;
@@ -146,4 +151,36 @@ pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
 
 pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions) -> bool {
     msg.channel_id.find().map_or(false, |c| c.is_nsfw())
+}
+
+
+pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
+    where F: FnOnce(CreateMessage) -> CreateMessage {
+    use ::MESSENGER_SOCKET;
+    use serde::Serialize;
+    use rmp_serde::Serializer;
+    use std::io::Write;
+
+    let msg = f(CreateMessage::default());
+    let map = serenity::utils::vecmap_to_json_map(msg.0);
+
+    Message::check_content_length(&map)?;
+    Message::check_embed_length(&map)?;
+
+    let content = serde_json::to_string(&serde_json::Value::Object(map))?;
+
+    let mut buf = Vec::new();
+
+    (chan_id, content).serialize(&mut Serializer::new(&mut buf)).unwrap();
+
+    let mut socket = MESSENGER_SOCKET.lock();
+
+    socket.write_all(buf.as_slice()).unwrap();
+
+    Ok(())
+}
+
+
+pub fn say<D: Display>(chan_id: ChannelId, content: D) -> serenity::Result<()> {
+    send_message(chan_id, |m| m.content(content))
 }

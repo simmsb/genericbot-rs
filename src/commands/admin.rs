@@ -11,6 +11,7 @@ use serenity::{
 use diesel;
 use diesel::prelude::*;
 use ::PgConnectionManager;
+use utils::say;
 
 
 command!(set_avatar(ctx, msg) {
@@ -33,7 +34,7 @@ command!(set_avatar(ctx, msg) {
             |e| e.avatar(Some(&data))
         )?;
 
-        void!(msg.channel_id.say("Set avatar!"));
+        void!(say(msg.channel_id, "Set avatar!"));
         return Ok(());
     }
 });
@@ -71,10 +72,10 @@ command!(clean_guilds(ctx, msg, args) {
     }
 
     if dry_run {
-        void!(msg.channel_id.say(format!("Would leave: {} guilds.", guilds_to_leave.len())));
+        void!(say(msg.channel_id, format!("Would leave: {} guilds.", guilds_to_leave.len())));
     } else {
         drop_guilds(&ctx, &guilds_to_leave);
-        void!(msg.channel_id.say(format!("Leaving: {} guilds.", guilds_to_leave.len())));
+        void!(say(msg.channel_id, format!("Leaving: {} guilds.", guilds_to_leave.len())));
     }
 
 });
@@ -110,7 +111,7 @@ command!(admin_stats(ctx, msg) {
         .push_codeblock(inner, None)
         .build();
 
-    void!(msg.channel_id.say(resp));
+    void!(say(msg.channel_id, resp));
 });
 
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Ben Simms <ben@bensimms.moe>"]
 
 [dependencies]
-serenity = { git = "https://github.com/nitros12/serenity", rev = "1d878b70d5d0cc354b09829a618b5dd15043fc41"}
+serenity = { git = "https://github.com/nitros12/serenity", rev = "c50b4b281fca9e7a2631ccd25c5d93a3e9253015"}
 diesel = { version = "1.2.2", features = ["postgres", "chrono"] }
 dotenv = "0.11"
 chrono = "0.4"
@@ -25,3 +25,5 @@ lru-cache = "0.1.1"
 threadpool = "1.7.1"
 log = "0.4.1"
 simplelog = "0.5.1"
+rmp-serde = "0.13.7"
+serde = "1.0.43"
