@@ -65,7 +65,7 @@ impl EventHandler for Handler {
         if let Some(shard) = ready.shard {
             info!(target: "bot", "Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
 
-            ctx.set_game(Game::playing(&format!("Little generic bot | #!help | Shard {}", shard[0])));
+            ctx.set_game(Game::playing(&format!("Little generic bot | generic#help | Shard {}", shard[0])));
         }
 
         background_tasks::background_task(&ctx);
@@ -418,7 +418,7 @@ impl SharedLogger for DiscordLogger {
 fn main() {
     CombinedLogger::init(
         vec![
-            SimpleLogger::new(LevelFilter::Info, Config::default()),
+            SimpleLogger::new(LevelFilter::Debug, Config::default()),
             DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
         ]
     ).unwrap();
@@ -430,6 +430,8 @@ fn main() {
     let pool = r2d2::Pool::builder().build(manager).unwrap();
 
     let mut client = Client::new(&token, Handler).unwrap();
+
+    client.threadpool.set_num_threads(20);
 
     let setup_fns = &[setup,
                       commands::tags::setup_tags,

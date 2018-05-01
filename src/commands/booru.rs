@@ -432,43 +432,46 @@ pub fn setup_booru(client: &mut Client, frame: StandardFramework) -> StandardFra
         data.insert::<BooruClient>(make_booru_client());
     }
 
-    frame.group("Booru",
-                |g| g
-                .command("booru", |c| c
-                         .cmd(ninja_cmd)
-                         .desc("Search cure.ninja for images.")
-                )
-                .command("danbooru", |c| c
-                         .cmd(danbooru_cmd)
-                         .desc("Search danbooru for images.")
-                         .check(nsfw_check)
-                         .batch_known_as(&["db"])
-                )
-                .command("e621", |c| c
-                         .cmd(e621_cmd)
-                         .desc("Search e621 for images.")
-                         .check(nsfw_check)
-                )
-                .command("e926", |c| c
-                         .cmd(e926_cmd)
-                         .desc("Search e926 for images.")
-                )
-                .command("gelbooru", |c| c
-                         .cmd(gelbooru_cmd)
-                         .desc("Search gelbooru for images.")
-                         .check(nsfw_check)
-                         .batch_known_as(&["gb", "gel"])
-                )
-                .command("safebooru", |c| c
-                         .cmd(safebooru_cmd)
-                         .desc("Search safebooru for images.")
-                         .batch_known_as(&["sb", "safe"])
-                )
-                .command("yandere", |c| c
-                         .cmd(yandere_cmd)
-                         .desc("Search yandere for images.")
-                         .check(nsfw_check)
-                         .batch_known_as(&["yan"])
-                )
+    frame
+        .bucket("booru_bucket", 3, 10, 2)
+        .group("Booru",
+               |g| g
+               .bucket("booru_bucket")
+               .command("booru", |c| c
+                        .cmd(ninja_cmd)
+                        .desc("Search cure.ninja for images.")
+               )
+               .command("danbooru", |c| c
+                        .cmd(danbooru_cmd)
+                        .desc("Search danbooru for images.")
+                        .check(nsfw_check)
+                        .batch_known_as(&["db"])
+               )
+               .command("e621", |c| c
+                        .cmd(e621_cmd)
+                        .desc("Search e621 for images.")
+                        .check(nsfw_check)
+               )
+               .command("e926", |c| c
+                        .cmd(e926_cmd)
+                        .desc("Search e926 for images.")
+               )
+               .command("gelbooru", |c| c
+                        .cmd(gelbooru_cmd)
+                        .desc("Search gelbooru for images.")
+                        .check(nsfw_check)
+                        .batch_known_as(&["gb", "gel"])
+               )
+               .command("safebooru", |c| c
+                        .cmd(safebooru_cmd)
+                        .desc("Search safebooru for images.")
+                        .batch_known_as(&["sb", "safe"])
+               )
+               .command("yandere", |c| c
+                        .cmd(yandere_cmd)
+                        .desc("Search yandere for images.")
+                        .check(nsfw_check)
+                        .batch_known_as(&["yan"])
+               )
     )
 }

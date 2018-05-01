@@ -80,13 +80,16 @@ pub fn setup_gimage(client: &mut Client, frame: StandardFramework) -> StandardFr
         data.insert::<ImageClient>(make_gimage_client());
     }
 
-    frame.group("GImage",
-                |g| g
-                .command("gimage", |c| c
-                         .cmd(gimage_cmd)
-                         .desc("Search google for images")
-                         .example("memes")
-                         .usage("{search string}")
-                )
+    frame
+        .bucket("gimage_bucket", 3, 10, 2)
+        .group("GImage",
+               |g| g
+               .bucket("gimage_bucket")
+               .command("gimage", |c| c
+                        .cmd(gimage_cmd)
+                        .desc("Search google for images")
+                        .example("memes")
+                        .usage("{search string}")
+               )
     )
 }
