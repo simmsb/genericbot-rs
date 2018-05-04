@@ -156,7 +156,7 @@ pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptio
 
 pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
     where F: FnOnce(CreateMessage) -> CreateMessage {
-    use ::MESSENGER_SOCKET;
+    use ::{MESSENGER_SOCKET, connect_socket};
     use serde::Serialize;
     use rmp_serde::Serializer;
     use std::io::Write;
@@ -175,7 +175,14 @@ pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
 
     let mut socket = MESSENGER_SOCKET.lock();
 
-    socket.write_all(buf.as_slice()).unwrap();
+    match socket.write_all(buf.as_slice()) {
+        Err(_) => {
+            println!("Socket closed, reconnecting");
+            *socket = connect_socket();
+            socket.write_all(buf.as_slice()).unwrap();
+        },
+        _      => (),
+    };
 
     Ok(())
 }

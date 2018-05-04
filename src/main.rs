@@ -210,12 +210,17 @@ impl Key for ThreadPoolCache {
 }
 
 
+pub fn connect_socket() -> UnixStream {
+    let messenger_socket = dotenv::var("DISCORD_BOT_MESSENGER_SOCKET").unwrap();
+    let message_socket = UnixStream::connect(messenger_socket).unwrap();
+    message_socket.shutdown(std::net::Shutdown::Read).unwrap();
+    message_socket
+}
+
+
 lazy_static! {
     pub static ref MESSENGER_SOCKET: Arc<Mutex<UnixStream>> = {
-        let messenger_socket = dotenv::var("DISCORD_BOT_MESSENGER_SOCKET").unwrap();
-        let message_socket = UnixStream::connect(messenger_socket).unwrap();
-        message_socket.shutdown(std::net::Shutdown::Read).unwrap();
-        Arc::new(Mutex::new(message_socket))
+        Arc::new(Mutex::new(connect_socket()))
     };
 }
 
