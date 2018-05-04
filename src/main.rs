@@ -37,7 +37,7 @@ use serenity::{
         guild::Guild,
         id::GuildId,
         channel::Message,
-        gateway::{Ready, Game},
+        gateway::Ready,
     },
     client::bridge::gateway::{ShardManager},
     framework::standard::StandardFramework,
@@ -68,7 +68,7 @@ impl EventHandler for Handler {
         if let Some(shard) = ready.shard {
             info!(target: "bot", "Connected as: {} on shard {} of {}", ready.user.name, shard[0], shard[1]);
 
-            ctx.set_game(Game::playing(&format!("Little generic bot | generic#help | Shard {}", shard[0])));
+            ctx.set_game_name(&format!("Little generic bot | generic#help | Shard {}", shard[0]));
         }
 
         background_tasks::background_task(&ctx);
@@ -449,7 +449,7 @@ fn main() {
 
     let mut client = Client::new(&token, Handler).unwrap();
 
-    client.threadpool.set_num_threads(20);
+    client.threadpool.set_num_threads(50);
 
     let setup_fns = &[setup,
                       commands::tags::setup_tags,
