@@ -13,7 +13,7 @@ use procinfo;
 use std::time;
 use rand;
 use rand::Rng;
-use utils::{try_resolve_user};
+use utils::{try_resolve_user, say, send_message};
 use itertools::Itertools;
 use whirlpool::{Whirlpool, Digest};
 use std::num::Wrapping;
@@ -66,7 +66,7 @@ command!(status_cmd(ctx, msg) {
 
     let uptime_str = format!("{}d, {}h, {}m, {}s", u_days, u_hours, u_min, u_sec);
 
-    msg.channel_id.send_message(
+    send_message(msg.channel_id,
         |m| m.embed(
             |e| e
                 .title("genericbot stats")
@@ -84,7 +84,7 @@ command!(status_cmd(ctx, msg) {
 
 
 command!(q(_ctx, msg) {
-    void!(msg.channel_id.say(rand::thread_rng()
+    void!(say(msg.channel_id, rand::thread_rng()
                              .choose(&["Yes", "No"])
                              .unwrap()));
 });
@@ -116,7 +116,7 @@ macro_rules! x_someone {
                 $err.to_string()
             };
 
-            msg.channel_id.say(res)?;
+            say(msg.channel_id, res)?;
         });
     )
 }
@@ -134,7 +134,7 @@ command!(rate(_ctx, msg, args) {
 
     let modulus = sum % Wrapping(12);
 
-    void!(msg.channel_id.say(format!("I rate {}: {}/10", asked, modulus)));
+    void!(say(msg.channel_id, format!("I rate {}: {}/10", asked, modulus)));
 });
 
 
@@ -170,7 +170,7 @@ command!(stando(_ctx, msg) {
         .push(&menacing)
         .build();
 
-    void!(msg.channel_id.say(out));
+    void!(say(msg.channel_id, out));
 });
 
 

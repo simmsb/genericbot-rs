@@ -21,7 +21,7 @@ use ::{
     PgConnectionManager,
     ensure_guild,
 };
-use utils::HistoryIterator;
+use utils::{HistoryIterator, say, send_message};
 use itertools::Itertools;
 use rand::Rng;
 use rand;
@@ -202,7 +202,7 @@ command!(markov_cmd(ctx, msg, args) {
     use utils::{names_for_members, and_comma_split};
 
     if !check_markov_state(&ctx, msg.guild_id().unwrap()) {
-        void!(msg.channel_id.say("You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
+        void!(say(msg.channel_id, "You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
         return Ok(());
     }
 
@@ -255,7 +255,7 @@ command!(markov_cmd(ctx, msg, args) {
 
     for _ in 0..20 { // try 20 times
         if let Some(generated) = chain.generate_string(50, 4) {
-            msg.channel_id.send_message(
+            send_message(msg.channel_id,
                 |m| m.embed(
                     |e| e
                         .title(format!("A markov chain composed of: {}.", user_names_s))
@@ -267,7 +267,7 @@ command!(markov_cmd(ctx, msg, args) {
         }
     }
 
-    void!(msg.channel_id.say("Failed to generate a markov."));
+    void!(say(msg.channel_id, "Failed to generate a markov."));
 });
 
 
@@ -278,9 +278,9 @@ command!(markov_enable(ctx, msg) {
         void!("Markov chains are already enabled here.");
     } else {
         set_markov(&ctx, msg.guild_id().unwrap().0 as i64, true);
-        void!(msg.channel_id.say("Enabled markov chains for this guild, now filling messages..."));
+        void!(say(msg.channel_id, "Enabled markov chains for this guild, now filling messages..."));
         let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
-        void!(msg.channel_id.say(format!("Build the markov chain with {} messages", count)));
+        void!(say(msg.channel_id, format!("Build the markov chain with {} messages", count)));
     }
 });
 
@@ -293,15 +293,15 @@ command!(markov_disable(ctx, msg) {
     } else {
         set_markov(&ctx, msg.guild_id().unwrap().0 as i64, false);
         drop_messages(&ctx, msg.guild_id().unwrap().0 as i64);
-        void!(msg.channel_id.say("Disabled markov chains and dropped messages for this guild."));
+        void!(say(msg.channel_id, "Disabled markov chains and dropped messages for this guild."));
     }
 });
 
 
 command!(fill_markov(ctx, msg) {
-    void!(msg.channel_id.say("Adding messages to the chain."));
+    void!(say(msg.channel_id, "Adding messages to the chain."));
     let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
-    void!(msg.channel_id.say(format!("Inserted {} messages into the chain.", count)));
+    void!(say(msg.channel_id, format!("Inserted {} messages into the chain.", count)));
 });
 
 

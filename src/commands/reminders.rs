@@ -14,6 +14,7 @@ use ::PgConnectionManager;
 use regex::Regex;
 use chrono::{NaiveDateTime, Utc, Datelike, Duration, NaiveDate};
 use itertools::Itertools;
+use utils::say;
 
 
 // TODO: test this function properly.
@@ -268,7 +269,7 @@ command!(remind_cmd(ctx, msg, args) {
 
     let delta = when.signed_duration_since(now);
 
-    void!(msg.channel_id.say(format!("Okay, I'll remind you about {} in {}", remind_msg, human_timedelta(&delta))));
+    void!(say(msg.channel_id, format!("Okay, I'll remind you about {} in {}", remind_msg, human_timedelta(&delta))));
 });
 
 
@@ -287,7 +288,7 @@ command!(remind_list(ctx, msg) {
         .push_line(": ")
         .push_codeblock_safe(lines, None);
 
-    void!(msg.channel_id.say(message));
+    void!(say(msg.channel_id, message));
 });
 
 
@@ -295,9 +296,9 @@ command!(delete_reminder_cmd(ctx, msg, args) {
     let index = get_arg!(args, single, usize, index) as i64;
 
     if delete_reminder(&ctx, msg.author.id.0 as i64, index) {
-        void!(msg.channel_id.say("Deleted that reminder."));
+        void!(say(msg.channel_id, "Deleted that reminder."));
     } else {
-        void!(msg.channel_id.say("That reminder didn't exist."));
+        void!(say(msg.channel_id, "That reminder didn't exist."));
     };
 
 });

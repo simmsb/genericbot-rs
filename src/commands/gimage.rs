@@ -9,6 +9,7 @@ use reqwest;
 use rand::{Rng, thread_rng};
 use typemap::Key;
 use regex::Regex;
+use utils::send_message;
 
 struct ImageClient;
 
@@ -66,7 +67,7 @@ command!(gimage_cmd(ctx, msg, args) {
 
     let resp = ImageResponse::search(&client, &search)?;
 
-    void!(msg.channel_id.send_message(|m| m.embed(
+    void!(send_message(msg.channel_id, |m| m.embed(
         |e| e.colour(0xaf38e4)
              .title(format!("GImage response for {}", search))
              .image(resp)

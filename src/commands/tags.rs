@@ -18,6 +18,7 @@ use diesel;
 use ::PgConnectionManager;
 use models::Tag;
 use itertools::Itertools;
+use utils::say;
 
 
 fn get_tag(ctx: &Context, g_id: i64, tag_key: &String) -> QueryResult<Tag> {
@@ -105,12 +106,12 @@ command!(add_tag(ctx, msg, args) {
     // let value = get_arg!(args, full, String, value).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
-        void!(msg.channel_id.say(format!("The tag: {} already exists", t.key)));
+        void!(say(msg.channel_id, format!("The tag: {} already exists", t.key)));
     } else if key.len() >= 50 {
-        void!(msg.channel_id.say("Tag keys cannot be longer than 50 characters."));
+        void!(say(msg.channel_id, "Tag keys cannot be longer than 50 characters."));
     } else {
         insert_tag(&ctx, &msg, &key, &value);
-        void!(msg.channel_id.say(format!("Created tag: {} with content: {}!", key, value)));
+        void!(say(msg.channel_id, format!("Created tag: {} with content: {}!", key, value)));
     }
 });
 
@@ -119,9 +120,9 @@ command!(tag(ctx, msg, args) {
     let key = get_arg!(args, multiple, String, key).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
-        void!(msg.channel_id.say(t.text));
+        void!(say(msg.channel_id, t.text));
     } else {
-        void!(msg.channel_id.say("This tag does not exist."));
+        void!(say(msg.channel_id, "This tag does not exist."));
     }
 });
 
@@ -140,12 +141,12 @@ command!(delete_tag(ctx, msg, args) {
 
         if has_manage_messages || (t.author_id as u64 == msg.author.id.0) {
             delete_tag_do(&ctx, t.id);
-            void!(msg.channel_id.say(format!("Deleted tag of name: {}.", t.key)));
+            void!(say(msg.channel_id, format!("Deleted tag of name: {}.", t.key)));
         } else {
-            void!(msg.channel_id.say(format!("You are not the owner of this tag or do not have manage messages.")));
+            void!(say(msg.channel_id, format!("You are not the owner of this tag or do not have manage messages.")));
         }
     } else {
-        void!(msg.channel_id.say("That tag does not exist."));
+        void!(say(msg.channel_id, "That tag does not exist."));
     }
 });
 
@@ -157,7 +158,7 @@ command!(list_tags(ctx, msg, args) {
     let page = args.single::<i64>().unwrap_or(1) - 1;
 
     if page < 0 {
-        void!(msg.channel_id.say(format!("That page does not exist.")));
+        void!(say(msg.channel_id, format!("That page does not exist.")));
         return Ok(());
     }
 
@@ -167,7 +168,7 @@ command!(list_tags(ctx, msg, args) {
     let tag_count = get_tag_count(&ctx, msg.guild_id().unwrap().0 as i64);
 
     if start > tag_count {
-        void!(msg.channel_id.say(format!("The requested page ({}) is greater than the number of pages ({}).", page, last / 20)));
+        void!(say(msg.channel_id, format!("The requested page ({}) is greater than the number of pages ({}).", page, last / 20)));
         return Ok(());
     }
 
@@ -186,19 +187,19 @@ command!(list_tags(ctx, msg, args) {
         .push_codeblock_safe(tag_content, None)
         .build();
 
-    void!(msg.channel_id.say(content));
+    void!(say(msg.channel_id, content));
 });
 
 
 command!(auto_tags_on(ctx, msg) {
     set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, true);
-    void!(msg.channel_id.say("Enabled automatic tags on this guild."));
+    void!(say(msg.channel_id, "Enabled automatic tags on this guild."));
 });
 
 
 command!(auto_tags_off(ctx, msg) {
     set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, false);
-    void!(msg.channel_id.say("Disabled automatic tags on this guild."));
+    void!(say(msg.channel_id, "Disabled automatic tags on this guild."));
 });
 
 

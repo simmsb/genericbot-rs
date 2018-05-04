@@ -14,6 +14,7 @@ use diesel::prelude::*;
 use itertools::Itertools;
 use ::PgConnectionManager;
 use ::PrefixCache;
+use utils::say;
 
 
 fn delete_prefix(ctx: &Context, p: &str, g_id: GuildId) {
@@ -75,7 +76,7 @@ command!(add_prefix_cmd(ctx, msg, args) {
         .push(" to the list of usable prefixes")
         .build();
 
-    void!(msg.channel_id.say(resp));
+    void!(say(msg.channel_id, resp));
 });
 
 
@@ -89,7 +90,7 @@ command!(list_prefixes_cmd(ctx, msg) {
         .push_safe(prefixes.iter().join(", "))
         .build();
 
-    void!(msg.channel_id.say(resp));
+    void!(say(msg.channel_id, resp));
 });
 
 
@@ -104,7 +105,7 @@ command!(delete_prefix_cmd(ctx, msg, args) {
         .push(" from the list of usable prefixes")
         .build();
 
-    void!(msg.channel_id.say(resp));
+    void!(say(msg.channel_id, resp));
 });
 
 

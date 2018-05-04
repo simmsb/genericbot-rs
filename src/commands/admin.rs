@@ -84,7 +84,7 @@ command!(clean_guilds(ctx, msg, args) {
 command!(stop_bot(ctx, msg) {
     use ::ShardManagerContainer;
 
-    void!(msg.channel_id.say("🤖🔫"));
+    void!(say(msg.channel_id, "🤖🔫"));
     let lock = ctx.data.lock();
     let mut manager = lock.get::<ShardManagerContainer>().unwrap().lock();
     manager.shutdown_all();

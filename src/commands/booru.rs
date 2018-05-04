@@ -13,7 +13,7 @@ use itertools::Itertools;
 use rand::{Rng, thread_rng};
 use typemap::Key;
 use std::marker;
-use utils::nsfw_check;
+use utils::{nsfw_check, send_message};
 
 struct BooruClient;
 
@@ -294,7 +294,7 @@ macro_rules! booru_def {
 
             let response = <$booru as BooruRequestor>::search(&client, &tags, None)?;
 
-            void!(msg.channel_id.send_message(|m| m.embed(|e| response.generate_embed(e))));
+            void!(send_message(msg.channel_id, |m| m.embed(|e| response.generate_embed(e))));
         });
     )
 }
@@ -422,7 +422,7 @@ command!(ninja_cmd(ctx, msg, args) {
 
     let response = Ninja::search(&client, &tags, Some(vec![("f", nsfw_key.to_owned())]))?;
 
-    void!(msg.channel_id.send_message(|m| m.embed(|e| response.generate_embed(e))));
+    void!(send_message(msg.channel_id, |m| m.embed(|e| response.generate_embed(e))));
 });
 
 
