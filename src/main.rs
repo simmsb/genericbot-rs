@@ -234,7 +234,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
         {
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
             if let Some(val) = cache.get_mut(&g_id) {
-                debug!("Got prefixes for guild: {}, {:?}", g_id, val);
+                trace!("Got prefixes for guild: {}, {:?}", g_id, val);
                 return Some(val.clone());
             }
         }
@@ -250,7 +250,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
 
         prefixes.push("generic#".to_owned());
 
-        debug!("Got prefixes for guild: {}, {:?}", g_id, prefixes);
+        trace!("Got prefixes for guild: {}, {:?}", g_id, prefixes);
         {
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
             let prefixes = Arc::new(RwLock::new(prefixes));
