@@ -8,7 +8,7 @@ use serenity::{
         MessageBuilder,
     },
 };
-use chrono::Utc;
+use chrono::{Utc, NaiveDateTime};
 use procinfo;
 use std::time;
 use rand;
@@ -138,13 +138,23 @@ command!(rate(_ctx, msg, args) {
 });
 
 
-command!(ping_cmd(_ctx, msg) {
+fn id_to_ts(id: u64) -> NaiveDateTime {
+    let offset_sec = (id >> 22) / 1000;
+    let ns         = (id >> 22) % 1000;
+
+    let secs = offset_sec + 1_420_070_400;
+
+    NaiveDateTime::from_timestamp(secs as i64, ns as u32 * 1_000_000)
+}
+
+
+command!(ping_cmd(ctx, msg) {
     let recvd = Utc::now().naive_utc();
-    let created = msg.id.created_at();
+    let created = id_to_ts(msg.id.0);
 
     if let Ok(mut tmp) = msg.channel_id.say("...") {
         let send_to_recv = recvd.signed_duration_since(created);
-        let send_to_repl = tmp.id.created_at().signed_duration_since(created);
+        let send_to_repl = id_to_ts(tmp.id.0).signed_duration_since(created);
 
         let reply = MessageBuilder::new()
             .push("Send to recv: ")

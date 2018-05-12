@@ -167,7 +167,8 @@ pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
     Message::check_content_length(&map)?;
     Message::check_embed_length(&map)?;
 
-    let content = serde_json::to_string(&serde_json::Value::Object(map))?;
+    let object = &serde_json::Value::Object(map);
+    let content = serde_json::to_string(&object)?;
 
     let mut buf = Vec::new();
 
@@ -175,14 +176,18 @@ pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
 
     let mut socket = MESSENGER_SOCKET.lock();
 
-    match socket.write_all(buf.as_slice()) {
-        Err(_) => {
-            println!("Socket closed, reconnecting");
-            *socket = connect_socket();
-            socket.write_all(buf.as_slice()).unwrap();
-        },
-        _      => (),
+    if socket.is_none() {
+        *socket = connect_socket();
+    } // try to connect once
+
+    let use_fallback = match socket.as_mut() {
+        Some(skt) => skt.write_all(buf.as_slice()).is_err(),
+        _         => true,
     };
+
+    if use_fallback {
+        serenity::http::send_message(chan_id.0, &object)?;
+    }
 
     Ok(())
 }
