@@ -148,7 +148,7 @@ fn id_to_ts(id: u64) -> NaiveDateTime {
 }
 
 
-command!(ping_cmd(ctx, msg) {
+command!(ping_cmd(_ctx, msg) {
     let recvd = Utc::now().naive_utc();
     let created = id_to_ts(msg.id.0);
 
