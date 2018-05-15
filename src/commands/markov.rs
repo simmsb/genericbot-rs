@@ -36,7 +36,7 @@ impl Key for MarkovStateCache {
 }
 
 
-fn get_messages(ctx: &Context, g_id: i64, u_ids: Vec<i64>) -> Vec<String> {
+fn get_messages(ctx: &Context, g_id: i64, u_ids: Option<Vec<i64>>) -> Vec<String> {
     use schema::message::dsl::*;
     use diesel::dsl::any;
 
@@ -44,14 +44,25 @@ fn get_messages(ctx: &Context, g_id: i64, u_ids: Vec<i64>) -> Vec<String> {
 
     no_arg_sql_function!(RANDOM, (), "Represents the pgsql RANDOM() function");
 
-    message
-        .filter(user_id.eq(any(u_ids)))
-        .filter(guild_id.eq(g_id))
-        .select(msg)
-        .order(RANDOM)
-        .limit(7000)
-        .load(pool)
-        .expect("Error getting messages from DB")
+
+    if let Some(ids) = u_ids {
+        message
+            .filter(user_id.eq(any(ids)))
+            .filter(guild_id.eq(g_id))
+            .select(msg)
+            .order(RANDOM)
+            .limit(7000)
+            .load(pool)
+            .expect("Error getting messages from DB")
+    } else {
+        message
+            .filter(guild_id.eq(g_id))
+            .select(msg)
+            .order(RANDOM)
+            .limit(7000)
+            .load(pool)
+            .expect("Error getting messages from DB")
+    }
 }
 
 
@@ -241,11 +252,11 @@ command!(markov_cmd(ctx, msg, args) {
 
     let user_ids = users.iter().map(|&id| id.0 as i64).collect();
 
-    let messages = get_messages(&ctx, msg.guild_id().unwrap().0 as i64, user_ids);
+    let messages = get_messages(&ctx, msg.guild_id().unwrap().0 as i64, Some(user_ids));
 
     let mut chain = markov::MChain::new();
 
-    for msg in messages.iter() {
+    for msg in &messages {
         chain.add_string(&msg);
     }
 
@@ -255,14 +266,39 @@ command!(markov_cmd(ctx, msg, args) {
 
     for _ in 0..20 { // try 20 times
         if let Some(generated) = chain.generate_string(50, 4) {
-            send_message(msg.channel_id,
+            void!(send_message(msg.channel_id,
                 |m| m.embed(
                     |e| e
                         .title(format!("A markov chain composed of: {}.", user_names_s))
                         .colour(col)
                         .description(generated)
                     )
-            )?;
+            ));
+            return Ok(());
+        }
+    }
+
+    void!(say(msg.channel_id, "Failed to generate a markov."));
+});
+
+
+command!(markov_all(ctx, msg) {
+    let messages = get_messages(&ctx, msg.guild_id().unwrap().0 as i64, None);
+    let mut chain = markov::MChain::new();
+
+    for msg in &messages {
+        chain.add_string(&msg);
+    }
+
+    for _ in 0..20 {
+        if let Some(generated) = chain.generate_string(50, 4) {
+            void!(send_message(msg.channel_id,
+                         |m| m.embed(
+                             |e| e
+                                 .title("A markov chain for the entire guild.")
+                                 .description(generated)
+                         )
+            ));
             return Ok(());
         }
     }
@@ -321,6 +357,10 @@ pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFr
                         .desc("Generate a markov chain for some users, if not users given: pick a random user")
                         .example("a_username @a_mention")
                         .usage("{users...}")
+               )
+               .command("markov_all", |c| c
+                        .cmd(markov_all)
+                        .desc("Generate a markov chain for all users in a guild")
                )
                .command("markov_enable", |c| c
                         .cmd(markov_enable)
