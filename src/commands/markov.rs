@@ -119,25 +119,50 @@ fn drop_messages(ctx: &Context, g_id: i64) {
 }
 
 
+fn clean_crap(ctx: &Context) -> usize {
+    use schema::message::dsl::*;
+    use diesel::dsl::sql;
+
+    let pool = extract_pool!(&ctx);
+
+    diesel::delete(
+        message.filter(sql(r#"
+            (char_length(msg) = 0)
+            OR (array_length(regexp_split_to_array(msg, E' '), 1) < 4)
+            OR (array_length(regexp_split_to_array(msg, E'[^\\w\\s\\d]'), 1) > (char_length(msg) / 2))"#)))
+       .execute(pool)
+       .expect("Couldn't strip crap.")
+}
+
+
 pub fn message_filter(msg: &Message) -> bool {
 
     if msg.author.bot {
         return false;
     }
 
+    if !crap_filter(&msg.content) {
+        return false;
+    }
+
+    return true;
+}
+
+
+fn crap_filter(msg: &str) -> bool {
     // nonzero length
-    if !(msg.content.len() > 0) {
+    if !(msg.len() > 0) {
         return false;
     }
 
     // atleast half is alphanumeric
-    if msg.content.chars().filter(|&c| c.is_alphanumeric()).count()
-        < (msg.content.len() / 2) {
+    if msg.chars().filter(|&c| c.is_alphanumeric()).count()
+        < (msg.len() / 2) {
             return false;
     }
 
     // atleast 4 spaces
-    if msg.content.chars().filter(|&c| c == ' ').count() < 4 {
+    if msg.chars().filter(|&c| c == ' ').count() < 4 {
         return false;
     }
 
@@ -341,6 +366,12 @@ command!(fill_markov(ctx, msg) {
 });
 
 
+command!(strip_crap(ctx, msg) {
+    void!(say(msg.channel_id, "Beginning to clean messages."));
+    let num_deleted = clean_crap(&ctx);
+    void!(say(msg.channel_id, format!("Deleted {} messages.", num_deleted)));
+});
+
 pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     {
         let mut data = client.data.lock();
@@ -378,5 +409,10 @@ pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFr
                         .required_permissions(Permissions::ADMINISTRATOR)
                         .bucket("markov_fill_bucket")
                )
+               .command("strip_crap", |c| c
+                        .cmd(strip_crap)
+                        .desc("Strip crap from the db.")
+                        .owners_only(true)
+                        .help_available(false))
     )
 }

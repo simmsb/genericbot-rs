@@ -182,12 +182,6 @@ trait BooruRequestor
 
 
 struct Ninja;
-struct DanBooru;
-struct E621;
-struct E926;
-struct GelBooru;
-struct SafeBooru;
-struct Yandere;
 
 
 impl BooruRequestor for Ninja {
@@ -247,7 +241,7 @@ impl BooruRequestor for Ninja {
 
 
 macro_rules! booru_def {
-    ( booru: $booru:ty,
+    ( booru: $booru:ident,
       cmd_name: $cmd_name:ident,
       base: $base:expr,
       ext: $ext:expr,
@@ -256,6 +250,7 @@ macro_rules! booru_def {
       response_keys: ($tag_key:expr, $source_key:expr),
       $({ $($extras:tt)* }),*
     ) => (
+        struct $booru;
         impl BooruRequestor for $booru {
             fn booru_name() -> &'static str {
                 stringify!($booru)
@@ -409,6 +404,44 @@ booru_def!(
 );
 
 
+booru_def!(
+    booru: genericBooru,
+    cmd_name: genericbooru_cmd,
+    base: "https://genericbooru.moe",
+    ext: "/post/index.json",
+    thumb: None,
+    url_key: "file_url",
+    response_keys: ("tags", Some("source")),
+
+    {
+        fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
+            let mut parsed: Vec<Value> = serde_json::from_str(val).map_err(|_| "Failed to parse response")?;
+
+            for mut elem in &mut parsed {
+
+                let mut ext = elem[Self::url_key()].as_str()
+                                               .ok_or("Failed to get a valid response")?
+                                               .chars()
+                                               .rev()
+                                               .take(3)
+                                               .collect::<Vec<_>>();
+                ext.reverse();
+
+                let ext = ext.into_iter().collect::<String>();
+
+                let fixed = json!(format!("{}/image/{}.{}",
+                                          Self::base_url(),
+                                          elem["md5"].as_str().ok_or("Failed to get a valid response")?,
+                                          ext));
+
+                elem["file_url"] = fixed;
+            }
+            Ok(parsed)
+        }
+    }
+);
+
+
 command!(ninja_cmd(ctx, msg, args) {
     let client = {
         let lock = ctx.data.lock();
@@ -472,6 +505,12 @@ pub fn setup_booru(client: &mut Client, frame: StandardFramework) -> StandardFra
                         .desc("Search yandere for images.")
                         .check(nsfw_check)
                         .batch_known_as(&["yan"])
+               )
+               .command("genericbooru", |c| c
+                        .cmd(genericbooru_cmd)
+                        .desc("Search genericbooru for images.")
+                        .check(nsfw_check)
+                        .batch_known_as(&["generic"])
                )
     )
 }
