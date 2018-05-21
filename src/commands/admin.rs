@@ -3,6 +3,7 @@ use serenity::{
     prelude::*,
     framework::standard::{
         StandardFramework,
+        CommandError,
     },
     utils::{
         MessageBuilder,
@@ -91,12 +92,29 @@ command!(stop_bot(ctx, msg) {
 });
 
 
+command!(reboot_shard(ctx, msg, args) {
+    use ::ShardManagerContainer;
+    use serenity::client::bridge::gateway::ShardId;
+
+    let shard = ShardId(get_arg!(args, single, u64, shard));
+
+    void!(say(msg.channel_id, format!("Rebooting shard: {}", shard)));
+
+    let lock = ctx.data.lock();
+    let mut manager = lock.get::<ShardManagerContainer>().unwrap().lock();
+
+    manager.restart(shard);
+
+});
+
+
 command!(admin_stats(ctx, msg) {
-    use ::ThreadPoolCache;
+    use ::{ThreadPoolCache, ShardManagerContainer};
 
     let data = ctx.data.lock();
     let dpool = &*data.get::<PgConnectionManager>().unwrap();
     let tpool = &*data.get::<ThreadPoolCache>().unwrap().lock();
+    let smanager = data.get::<ShardManagerContainer>().unwrap().lock();
 
     let inner = MessageBuilder::new()
         .push("Active threads: ")
@@ -105,6 +123,7 @@ command!(admin_stats(ctx, msg) {
         .push_line(tpool.queued_count())
         .push("DB Connections: ")
         .push_line(dpool.state().connections)
+        .push_line(format!("Shards: {:?}", smanager.shards_instantiated()))
         .build();
 
     let resp = MessageBuilder::new()
@@ -137,6 +156,11 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
                     "stop_bot", |c| c
                         .cmd(stop_bot)
                         .desc("Bye")
+                )
+                .command(
+                    "reboot_shard", |c| c
+                        .cmd(reboot_shard)
+                        .desc("Restart a shard")
                 )
                 .command(
                     "admin_stats", |c| c

@@ -134,6 +134,14 @@ impl EventHandler for Handler {
 
         ensure_guild(&ctx, guild.id);
     }
+
+    fn resume(&self, _ctx: Context, evt: serenity::model::event::ResumedEvent) {
+        debug!(target: "bot", "Got resume: {:?}", evt);
+    }
+
+    fn shard_stage_update(&self, _ctx: Context, evt: serenity::client::bridge::gateway::event::ShardStageUpdateEvent) {
+        debug!(target: "bot", "Got stage update: {:?}", evt);
+    }
 }
 
 
