@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Ben Simms <ben@bensimms.moe>"]
 
 [dependencies]
-serenity = { git = "https://github.com/nitros12/serenity", rev = "3b4bc10474d9b902193576f751e5168f72800bac"}
+serenity = { git = "https://github.com/nitros12/serenity", rev = "507cbbe81796d8d9c66bb23965b924bb36877e2f"}
 diesel = { version = "1.3.0", features = ["postgres", "chrono"] }
 dotenv = "0.12"
 chrono = "0.4"
