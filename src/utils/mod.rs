@@ -14,6 +14,7 @@ use serenity::prelude::*;
 use serenity;
 use std::fmt::Display;
 use serde_json;
+use itertools::Itertools;
 
 
 #[macro_use]
@@ -51,17 +52,21 @@ pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
 
 
 pub fn and_comma_split<T: AsRef<str>>(m: &[T]) -> String {
-    let mut res = String::new();
-    let end = m.len() as isize;
+    let len = m.len();
 
-    for (n, s) in m.into_iter().enumerate() {
-        res.push_str(s.as_ref());
-        if n as isize == end - 2 {
+    let res = match len {
+        0 => "".to_owned(),
+        1 => m[0].as_ref().to_owned(),
+        _ => {
+            let mut res = String::new();
+            let mut iter = m.into_iter();
+            res.push_str(&iter.take(len - 1).map(|s| s.as_ref()).join(", "));
             res.push_str(" and ");
-        } else if (n as isize) < end - 2 {
-            res.push_str(", ");
-        }
-    }
+            res.push_str(m[len - 1].as_ref());
+            res
+        },
+    };
+
     return res;
 }
 

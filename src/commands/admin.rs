@@ -68,7 +68,7 @@ command!(clean_guilds(ctx, msg, args) {
 
     let mut guilds_to_leave = empty_guilds(&ctx)?;
 
-    for guild in ignored_guilds.iter() {
+    for guild in &ignored_guilds {
         guilds_to_leave.remove_item(&guild);
     }
 
@@ -104,7 +104,6 @@ command!(reboot_shard(ctx, msg, args) {
     let mut manager = lock.get::<ShardManagerContainer>().unwrap().lock();
 
     manager.restart(shard);
-
 });
 
 

@@ -13,8 +13,7 @@ use procinfo;
 use std::time;
 use rand;
 use rand::Rng;
-use utils::{try_resolve_user, say, send_message};
-use itertools::Itertools;
+use utils::{try_resolve_user, say, send_message, and_comma_split};
 use whirlpool::{Whirlpool, Digest};
 use std::num::Wrapping;
 
@@ -110,8 +109,9 @@ macro_rules! x_someone {
                 .unwrap_or_else(|_| Vec::new());
 
             let res = if !users.is_empty() {
-                let mention_list = users.into_iter().map(|u| u.mention()).join(", ");
-                format!($send_msg, msg.author.mention(), mention_list)
+                let mentions: Vec<_> = users.into_iter().map(|u| u.mention()).collect();
+                let result = and_comma_split(&mentions);
+                format!($send_msg, msg.author.mention(), result)
             } else {
                 $err.to_string()
             };

@@ -156,8 +156,7 @@ fn crap_filter(msg: &str) -> bool {
     }
 
     // atleast half is alphanumeric
-    if msg.chars().filter(|&c| c.is_alphanumeric()).count()
-        < (msg.len() / 2) {
+    if msg.chars().filter(|&c| c.is_alphanumeric()).count() < (msg.len() / 2) {
             return false;
     }
 
@@ -262,8 +261,7 @@ command!(markov_cmd(ctx, msg, args) {
                                                       }
                                                   )
                                                   .collect();
-                    let &&member_id = rand::thread_rng()
-                        .choose(&member_ids)?;
+                    let &&member_id = rand::thread_rng().choose(&member_ids)?;
                     guild.member(member_id).ok().map(|m| vec![m.clone()])
                 })
             }
@@ -371,6 +369,7 @@ command!(strip_crap(ctx, msg) {
     let num_deleted = clean_crap(&ctx);
     void!(say(msg.channel_id, format!("Deleted {} messages.", num_deleted)));
 });
+
 
 pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     {

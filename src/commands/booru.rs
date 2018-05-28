@@ -21,14 +21,15 @@ impl Key for BooruClient {
     type Value = reqwest::Client;
 }
 
-
-fn make_booru_client() -> reqwest::Client {
-    let mut headers = header::Headers::new();
-    headers.set(header::UserAgent::new("genericBot Discord Bot: https://github.com/nitros12/genericbot-rs"));
-    reqwest::Client::builder()
-        .default_headers(headers)
-        .build()
-        .unwrap()
+impl BooruClient {
+    fn generate() -> reqwest::Client {
+        let mut headers = header::Headers::new();
+        headers.set(header::UserAgent::new("genericBot Discord Bot: https://github.com/nitros12/genericbot-rs"));
+        reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .unwrap()
+    }
 }
 
 
@@ -462,7 +463,7 @@ command!(ninja_cmd(ctx, msg, args) {
 pub fn setup_booru(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     {
         let mut data = client.data.lock();
-        data.insert::<BooruClient>(make_booru_client());
+        data.insert::<BooruClient>(BooruClient::generate());
     }
 
     frame

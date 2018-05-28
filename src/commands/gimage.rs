@@ -1,15 +1,11 @@
-use serenity::{
-    prelude::*,
-    framework::standard::{
-        StandardFramework,
-    },
-};
-use reqwest::header;
-use reqwest;
-use rand::{Rng, thread_rng};
-use typemap::Key;
+use rand::{thread_rng, Rng};
 use regex::Regex;
+use reqwest;
+use reqwest::header;
+use serenity::{framework::standard::StandardFramework, prelude::*};
+use typemap::Key;
 use utils::send_message;
+
 
 struct ImageClient;
 
@@ -17,14 +13,17 @@ impl Key for ImageClient {
     type Value = reqwest::Client;
 }
 
-fn make_gimage_client() -> reqwest::Client {
-    let mut headers = header::Headers::new();
-    headers.set(header::UserAgent::new("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"));
-    reqwest::Client::builder()
-        .default_headers(headers)
-        .build()
-        .unwrap()
+impl ImageClient {
+    fn generate() -> reqwest::Client {
+        let mut headers = header::Headers::new();
+        headers.set(header::UserAgent::new("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"));
+        reqwest::Client::builder()
+            .default_headers(headers)
+            .build()
+            .unwrap()
+    }
 }
+
 
 struct ImageResponse;
 
@@ -35,10 +34,11 @@ impl ImageResponse {
 
     fn search_for(client: &reqwest::Client, search: &str) -> Result<String, &'static str> {
         let params = Self::params(search);
-        client.get("https://www.google.com/search")
-              .query(&params)
-              .send().map_err(|_| "No response from google")?
-              .text().map_err(|_| "Invalid response from google")
+        client
+            .get("https://www.google.com/search")
+            .query(&params)
+            .send().map_err(|_| "No response from google")?
+            .text().map_err(|_| "Invalid response from google")
     }
 
     fn select_response(resp: String) -> Result<String, &'static str> {
@@ -47,7 +47,10 @@ impl ImageResponse {
         }
 
         let images: Vec<_> = IMG_REGEX.captures_iter(&resp).collect();
-        return thread_rng().choose(&images).map(|s| s.get(1).unwrap().as_str().to_owned()).ok_or("No images found");
+        return thread_rng()
+            .choose(&images)
+            .map(|s| s.get(1).unwrap().as_str().to_owned())
+            .ok_or("No images found");
     }
 
     fn search(client: &reqwest::Client, search: &str) -> Result<String, &'static str> {
@@ -78,19 +81,17 @@ command!(gimage_cmd(ctx, msg, args) {
 pub fn setup_gimage(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     {
         let mut data = client.data.lock();
-        data.insert::<ImageClient>(make_gimage_client());
+        data.insert::<ImageClient>(ImageClient::generate());
     }
 
     frame
         .bucket("gimage_bucket", 3, 10, 2)
-        .group("GImage",
-               |g| g
-               .bucket("gimage_bucket")
-               .command("gimage", |c| c
-                        .cmd(gimage_cmd)
-                        .desc("Search google for images")
-                        .example("memes")
-                        .usage("{search string}")
-               )
-    )
+        .group("GImage", |g| {
+            g.bucket("gimage_bucket").command("gimage", |c| {
+                c.cmd(gimage_cmd)
+                    .desc("Search google for images")
+                    .example("memes")
+                    .usage("{search string}")
+            })
+        })
 }
