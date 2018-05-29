@@ -215,27 +215,29 @@ impl BooruRequestor for Ninja {
     }
 
     fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
-        fn cut_misformed(val: &str) -> Result<&str, &'static str> {
-            let mut count = 0;
+        // We used to have to remove some extra crap at the start
+        // we don't now
+        // fn cut_misformed(val: &str) -> Result<&str, &'static str> {
+        //     let mut count = 0;
 
-            for (i, c) in val.chars().enumerate() {
-                if c == '{' {
-                    count += 1;
-                } else if c == '}' {
-                    count -= 1;
+        //     for (i, c) in val.chars().enumerate() {
+        //         if c == '{' {
+        //             count += 1;
+        //         } else if c == '}' {
+        //             count -= 1;
 
-                    if count == 0 {
-                        // i + 2, to move over the }\n
-                        return Ok(&val[(i + 2)..]);
-                    }
-                }
-            }
+        //             if count == 0 {
+        //                 // i + 2, to move over the }\n
+        //                 return Ok(&val[(i + 2)..]);
+        //             }
+        //         }
+        //     }
 
-            Err("Couldn't fixup json")
-        }
+        //     Err("Couldn't fixup json")
+        // }
 
-        let fixed = cut_misformed(val)?;
-        let parsed: Value = serde_json::from_str(fixed).map_err(|_| "Failed to parse response")?;
+        // let fixed = cut_misformed(val)?;
+        let parsed: Value = serde_json::from_str(val).map_err(|_| "Failed to parse response")?;
         parsed["results"].as_array().map(|v| v.to_owned()).ok_or("No results found")
     }
 }
