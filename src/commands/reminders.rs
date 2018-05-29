@@ -276,6 +276,11 @@ command!(remind_cmd(ctx, msg, args) {
 command!(remind_list(ctx, msg) {
     let reminders = list_reminders(&ctx, msg.author.id.0 as i64);
 
+    if reminders.is_empty() {
+        void!(say(msg.channel_id, "No reminders for this user"));
+        return Ok(());
+    }
+
     let lines = reminders
         .into_iter()
         .zip(1..)

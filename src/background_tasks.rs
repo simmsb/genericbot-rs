@@ -126,8 +126,7 @@ fn send_reminder_msg(rem: &Reminder) {
         .push(", ")
         .push(human_timedelta(&diff))
         .push(" ago, you asked me to remind you about: ")
-        .push_safe(&rem.text)
-        .build();
+        .push_safe(&rem.text);
 
     let chan = serenity::model::id::ChannelId::from(rem.channel_id as u64);
     if chan.say(&content).is_ok() {

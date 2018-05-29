@@ -122,12 +122,10 @@ command!(admin_stats(ctx, msg) {
         .push_line(tpool.queued_count())
         .push("DB Connections: ")
         .push_line(dpool.state().connections)
-        .push_line(format!("Shards: {:?}", smanager.shards_instantiated()))
-        .build();
+        .push_line(format!("Shards: {:?}", smanager.shards_instantiated()));
 
     let resp = MessageBuilder::new()
-        .push_codeblock(inner, None)
-        .build();
+        .push_codeblock(inner, None);
 
     void!(say(msg.channel_id, resp));
 });

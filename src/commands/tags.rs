@@ -103,7 +103,6 @@ fn set_auto_tags(ctx: &Context, g_id: i64, value: bool) {
 command!(add_tag(ctx, msg, args) {
     let key = get_arg!(args, single_quoted, String, key);
     let value = args.full();
-    // let value = get_arg!(args, full, String, value).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
         void!(say(msg.channel_id, format!("The tag: {} already exists", t.key)));
@@ -184,8 +183,7 @@ command!(list_tags(ctx, msg, args) {
 
     let content = MessageBuilder::new()
         .push_line(format!("Tags {}-{} of {}", start, cmp::min(last, tag_count), tag_count))
-        .push_codeblock_safe(tag_content, None)
-        .build();
+        .push_codeblock_safe(tag_content, None);
 
     void!(say(msg.channel_id, content));
 });

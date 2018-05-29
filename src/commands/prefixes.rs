@@ -73,8 +73,7 @@ command!(add_prefix_cmd(ctx, msg, args) {
     let resp = MessageBuilder::new()
         .push("Added the prefix: ")
         .push_safe(&prefix)
-        .push(" to the list of usable prefixes")
-        .build();
+        .push(" to the list of usable prefixes");
 
     void!(say(msg.channel_id, resp));
 });
@@ -87,8 +86,7 @@ command!(list_prefixes_cmd(ctx, msg) {
 
     let resp = MessageBuilder::new()
         .push("Prefixes for this guild: ")
-        .push_safe(prefixes.iter().join(", "))
-        .build();
+        .push_safe(prefixes.iter().join(", "));
 
     void!(say(msg.channel_id, resp));
 });
@@ -102,8 +100,7 @@ command!(delete_prefix_cmd(ctx, msg, args) {
     let resp = MessageBuilder::new()
         .push("Deleted the prefix: ")
         .push_safe(&prefix)
-        .push(" from the list of usable prefixes")
-        .build();
+        .push(" from the list of usable prefixes");
 
     void!(say(msg.channel_id, resp));
 });

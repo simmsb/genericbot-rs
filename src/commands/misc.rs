@@ -89,13 +89,27 @@ command!(q(_ctx, msg) {
 });
 
 
-command!(message_owner(ctx, _msg, args) {
+command!(message_owner(ctx, msg, args) {
     use ::OwnerId;
     let text = args.full();
 
+    let message = MessageBuilder::new()
+        .push("Private message: ")
+        .push_mono_line_safe(text)
+        .push("From: ")
+        .push(&msg.author.tag())
+        .push(format!("({})", msg.author.id));
+
+    let message = if let Some(guild) = msg.guild_id() {
+        message.push(" in guild: ")
+               .push(guild)
+    } else {
+        message
+    };
+
     let lock = ctx.data.lock();
     let user = &lock.get::<OwnerId>().unwrap();
-    user.direct_message(|m| m.content(text))?;
+    user.direct_message(|m| m.content(message))?;
 });
 
 
@@ -162,8 +176,7 @@ command!(ping_cmd(_ctx, msg) {
             .push_line("ms")
             .push("Send to reply: ")
             .push(send_to_repl.num_milliseconds())
-            .push_line("ms")
-            .build();
+            .push_line("ms");
 
         void!(tmp.edit(|m| m.content(reply)));
     }
@@ -177,8 +190,7 @@ command!(stando(_ctx, msg) {
         .push("ＴＨＩＳ 　ＭＵＳＴ 　ＢＥ 　ＴＨＥ 　ＷＯＲＫ 　ＯＦ 　ＡＮ 　ＥＮＥＭＹ 「")
         .mention(&msg.author)
         .push_line("」*！！*")
-        .push(&menacing)
-        .build();
+        .push(&menacing);
 
     void!(say(msg.channel_id, out));
 });
