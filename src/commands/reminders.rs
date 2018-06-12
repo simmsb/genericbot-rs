@@ -18,7 +18,7 @@ use utils::say;
 
 
 // TODO: test this function properly.
-fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<NaiveDateTime, CommandError> {
+fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDateTime, String), CommandError> {
     // parse out jan(uary) ... stuff etc
     lazy_static! {
         static ref TDIFF_RE: Regex = Regex::new(concat!(
@@ -59,9 +59,9 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<NaiveDateT
     if date.contains("tomorrow") {
         base_time += Duration::days(1);
         has_parsed = true;
-    }
+    };
 
-    let mut has_parsed_diff = false;
+    let mut tdiff_parsed = false;
 
     for caps in TDIFF_RE.captures_iter(date) {
         if has_parsed {
@@ -96,10 +96,10 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<NaiveDateT
                 _   => unreachable!(),
             };
         }
-        has_parsed_diff = true;
+        tdiff_parsed = true;
     }
 
-    has_parsed |= has_parsed_diff;
+    has_parsed |= tdiff_parsed;
 
     if let Some(caps) = TDAY_RE.captures(date) {
         if has_parsed {
@@ -169,7 +169,14 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<NaiveDateT
         return Err(CommandError::from("Could not parse time."));
     }
 
-    Ok(base_time)
+    let replaced = TDIFF_RE.replace_all(date, "");
+    let replaced = TDAY_RE.replace_all(&replaced, "");
+    let replaced = DMONTH_RE.replace_all(&replaced, "");
+    let replaced = replaced.replace("tomorrow", "")
+                           .trim()
+                           .to_owned();
+
+    Ok((base_time, replaced))
 }
 
 
@@ -257,19 +264,18 @@ pub fn human_timedelta(delta: &Duration) -> String {
 
 
 command!(remind_cmd(ctx, msg, args) {
-    let time = get_arg!(args, single_quoted, String, time).to_lowercase();
-    let remind_msg = args.full();
+    let time = args.full();
 
     let now = Utc::now().naive_utc();
-    let when = recognise_date(now, &time)?;
+    let (when, replaced) = recognise_date(now, &time)?;
 
     insert_reminder(&ctx, msg.author.id.0 as i64,
                     msg.channel_id.0 as i64,
-                    when, now, remind_msg);
+                    when, now, &replaced);
 
     let delta = when.signed_duration_since(now);
 
-    void!(say(msg.channel_id, format!("Okay, I'll remind you about {} in {}", remind_msg, human_timedelta(&delta))));
+    void!(say(msg.channel_id, format!("Okay, I'll remind you about {} in {}", replaced, human_timedelta(&delta))));
 });
 
 
@@ -314,9 +320,24 @@ pub fn setup_reminders(_client: &mut Client, frame: StandardFramework) -> Standa
                 |g| g
                 .command("remind", |c| c
                          .cmd(remind_cmd)
-                         .desc(concat!("Create a reminder to remind you of something at a point in time.",
-                                       "\nYou can specify deltas, days of the week or months and days.",
-                                       "\nFor example: \"Tomorrow\", \"3 hours\", \"july 4th\"."))
+                         .desc(r#"Create a reminder to remind you of something at a point in time.
+You can specify deltas, days of the week or months and days.
+For example: "Tomorrow", "3 hours", "july 4th".
+Valid formats are: ```md
+Time Difference
+===============
+- (num) y | years
+- (num) M | months
+- (num) w | weeks
+- (num) d | days
+- (num) h | hours
+- (num) m | minutes
+- (num) s | seconds
+
+- Day of Week
+- Month (day)
+- Tomorrow
+```"#)
                          .example("\"3 hours\" Something")
                          .usage("{when} {message}"))
                 .command("reminder_list", |c| c

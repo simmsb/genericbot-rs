@@ -54,9 +54,9 @@ pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
 pub fn and_comma_split<T: AsRef<str>>(m: &[T]) -> String {
     let len = m.len();
 
-    let res = match len {
-        0 => "".to_owned(),
-        1 => m[0].as_ref().to_owned(),
+    let res = match m {
+        [] => "".to_owned(),
+        [a] => a.as_ref().to_owned(),
         _ => {
             let mut res = String::new();
             let mut iter = m.into_iter();
