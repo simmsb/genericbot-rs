@@ -29,7 +29,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
             r"months?|",
             r"w(?:eeks?)?|",
             r"d(?:ays?)?|",
-            r"h(?:ours?)?|",
+            r"h(?:r|(?:our?))?s?|",
             r"m(?:in(?:ute)?s?)?|",
             r"s(?:ec(?:ond)?s?)?)"
         )).unwrap();
