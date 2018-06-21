@@ -44,6 +44,14 @@ pub struct NewTag<'a> {
     pub text: &'a str,
 }
 
+#[table_name="command_alias"]
+#[derive(Insertable)]
+pub struct NewCommandAlias<'a> {
+    pub owner_id: i64,
+    pub alias_name: &'a str,
+    pub alias_value: &'a str,
+}
+
 #[derive(Queryable)]
 pub struct Guild {
     pub id: i64,
@@ -85,4 +93,12 @@ pub struct Tag {
     pub guild_id: i64,
     pub key: String,
     pub text: String,
+}
+
+#[derive(Queryable)]
+pub struct CommandAlias {
+    pub id: i64,
+    pub owner_id: i64,
+    pub alias_name: String,
+    pub alias_value: String,
 }

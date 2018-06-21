@@ -48,7 +48,7 @@ fn insert_tag(ctx: &Context, msg: &Message, key: &String, content: &str) {
     diesel::insert_into(tag::table)
         .values(&new_tag)
         .execute(pool)
-        .expect("Couldn't save posts");
+        .expect("Couldn't insert tag");
 }
 
 
@@ -57,7 +57,9 @@ fn delete_tag_do(ctx: &Context, tag_id: i64) {
 
     let pool = extract_pool!(&ctx);
 
-    diesel::delete(tag.filter(id.eq(tag_id))).execute(pool).unwrap();
+    diesel::delete(tag.filter(id.eq(tag_id)))
+        .execute(pool)
+        .unwrap();
 }
 
 
@@ -102,7 +104,7 @@ fn set_auto_tags(ctx: &Context, g_id: i64, value: bool) {
 
 command!(add_tag(ctx, msg, args) {
     let key = get_arg!(args, single_quoted, String, key);
-    let value = args.full();
+    let value = args.iter::<String>().map(|s| s.unwrap()).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
         void!(say(msg.channel_id, format!("The tag: {} already exists", t.key)));
@@ -211,7 +213,6 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                         .desc("Create a tag with a name and response.")
                         .example("\"something\" This tag's content.")
                         .usage("{tag name} {tag content}")
-                        .num_args(2)
                 )
                 .command(
                     "tag", |c| c

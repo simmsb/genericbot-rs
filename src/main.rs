@@ -40,7 +40,10 @@ use serenity::{
         gateway::Ready,
     },
     client::bridge::gateway::{ShardManager},
-    framework::standard::StandardFramework,
+    framework::{
+        Framework,
+        standard::StandardFramework,
+    },
     utils::with_cache,
 };
 
@@ -178,6 +181,12 @@ struct ShardManagerContainer;
 
 impl Key for ShardManagerContainer {
     type Value = Arc<Mutex<ShardManager>>;
+}
+
+struct FrameworkContainer;
+
+impl Key for FrameworkContainer {
+    type Value = Arc<Mutex<Option<Box<Framework + Send>>>>;
 }
 
 struct PgConnectionManager;
@@ -344,32 +353,53 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                          .suggestion_text("No command with the name '{}' was found.")
                          .lacking_permissions(HelpBehaviour::Hide))
         .unrecognised_command(|ctx, msg, cmd_name| {
-            use schema::guild::dsl::*;
-            use schema::tag::dsl::*;
+            use commands::aliases::get_alias;
+            {
+                use schema::guild::dsl::*;
+                use schema::tag::dsl::*;
 
-            let g_id = match msg.guild_id() {
-                Some(x) => x.0 as i64,
-                None    => return,
-            };
+                let g_id = match msg.guild_id() {
+                    Some(x) => x.0 as i64,
+                    None    => return,
+                };
 
-            let pool = extract_pool!(&ctx);
+                let pool = extract_pool!(&ctx);
 
-            let has_auto_tags = guild
-                .find(&g_id)
-                .select(tag_prefix_on)
-                .first(pool)
-                .unwrap_or(false);
+                let has_auto_tags = guild
+                    .find(&g_id)
+                    .select(tag_prefix_on)
+                    .first(pool)
+                    .unwrap_or(false);
 
-            if has_auto_tags {
-                if let Ok(r_tag) = tag
-                    .filter(guild_id.eq(&g_id))
-                    .filter(key.eq(cmd_name))
-                    .select(text)
-                    .first::<String>(pool) {
-                        void!(say(msg.channel_id, r_tag));
+                if has_auto_tags {
+                    if let Ok(r_tag) = tag
+                        .filter(guild_id.eq(&g_id))
+                        .filter(key.eq(cmd_name))
+                        .select(text)
+                        .first::<String>(pool) {
+                            void!(say(msg.channel_id, r_tag));
+                        }
                 }
             }
 
+            if let Some(alias) = get_alias(&ctx, &cmd_name, msg.author.id.0 as i64) {
+                // we need to be careful here, as to not keep the data locked when we dispatch the command
+                let (mut framework, threadpool) = {
+                    let lock = ctx.data.lock();
+                    let framework = lock.get::<FrameworkContainer>().unwrap().clone();
+                    let threadpool = lock.get::<ThreadPoolCache>().unwrap().clone();
+                    (framework, threadpool)
+                };
+                let alias_message = format!("generic#{}", alias);
+
+                let mut spoof_message = msg.clone();
+                spoof_message.content = alias_message;
+
+                if let Some(ref mut framework) = *framework.lock() {
+                    framework.dispatch(ctx.clone(), spoof_message, &*threadpool.lock(), false);
+                };
+
+            }
         })
 }
 
@@ -470,6 +500,7 @@ fn main() {
                       commands::booru::setup_booru,
                       commands::prefixes::setup_prefixes,
                       commands::gimage::setup_gimage,
+                      commands::aliases::setup_aliases,
                      ];
 
     let framework = setup_fns.iter().fold(
@@ -480,7 +511,8 @@ fn main() {
 
     {
         let mut data = client.data.lock();
-        data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
+        data.insert::<FrameworkContainer>(client.framework.clone());
+        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<PgConnectionManager>(pool);
         data.insert::<StartTime>(chrono::Utc::now().naive_utc());
         data.insert::<CmdCounter>(Arc::new(RwLock::new(0)));

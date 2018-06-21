@@ -1,4 +1,13 @@
 table! {
+    command_alias (id) {
+        id -> Int8,
+        owner_id -> Int8,
+        alias_name -> Varchar,
+        alias_value -> Varchar,
+    }
+}
+
+table! {
     guild (id) {
         id -> Int8,
         markov_on -> Bool,
@@ -51,6 +60,7 @@ joinable!(prefix -> guild (guild_id));
 joinable!(tag -> guild (guild_id));
 
 allow_tables_to_appear_in_same_query!(
+    command_alias,
     guild,
     message,
     prefix,
