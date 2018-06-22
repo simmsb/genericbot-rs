@@ -94,7 +94,7 @@ impl<'a> MChain<'a> {
             return None;
         }
 
-        if res.chars().filter(|&c| c == ' ').count() < minimum {
+        if res.chars().filter(|&c| !c.is_whitespace()).count() < minimum {
             return None;
         }
 

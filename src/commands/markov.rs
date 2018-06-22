@@ -161,7 +161,7 @@ fn crap_filter(msg: &str) -> bool {
     }
 
     // atleast 4 spaces
-    if msg.chars().filter(|&c| c == ' ').count() < 4 {
+    if msg.chars().filter(|&c| c.is_whitespace()).count() < 4 {
         return false;
     }
 
@@ -288,7 +288,7 @@ command!(markov_cmd(ctx, msg, args) {
     let col = average_colours(colours);
 
     for _ in 0..20 { // try 20 times
-        if let Some(generated) = chain.generate_string(50, 4) {
+        if let Some(generated) = chain.generate_string(50, 10) {
             void!(send_message(msg.channel_id,
                 |m| m.embed(
                     |e| e
