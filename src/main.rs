@@ -304,12 +304,18 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 
     frame
         .on_dispatch_error(| _ctx, msg, err | {
+            use rand::Rng;
+
             debug!(target: "bot", "handling error: {:?}", err);
             let s = match err {
                 OnlyForGuilds =>
                     "This command can only be used in private messages.".to_string(),
                 RateLimited(time) =>
-                    format!("You are ratelimited, try again in: {} seconds.", time),
+                    match rand::thread_rng().gen_range(0, 10) {
+                        0 => format!("Oopsie woopsie!! Uwu you made a fucky wucky!!! You're using the bot Tooo FAWST!?!?! Try again in {} seconds.", time),
+                        1 => format!("O-onii-chan... That hurts.. B-be gentle... Try again in {} seconds.", time),
+                        _ => format!("You are ratelimited, try again in: {} seconds.", time),
+                    },
                 CheckFailed =>
                     "The check for this command failed.".to_string(),
                 LackOfPermissions(perms) =>
