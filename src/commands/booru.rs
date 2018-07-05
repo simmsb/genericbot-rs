@@ -56,10 +56,10 @@ impl<T: BooruRequestor> BooruResponse<T> {
 
     fn generate_embed(&self, e: CreateEmbed) -> CreateEmbed {
         let tags = self.tags
+                       .replace("_", "\\_")
                        .chars()
                        .take(1024)
-                       .collect::<String>()
-            .replace("_", "\\_");
+                       .collect::<String>();
 
         let mut e = e.colour(0xc3569f)
                      .title(format!("Booru response for {}", T::booru_name()))
