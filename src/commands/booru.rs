@@ -36,20 +36,20 @@ impl BooruClient {
 struct BooruResponse<T: BooruRequestor> {
     image_url: String,
     tags: String,
-    source_url: Option<String>,
+    page_url: String,
     _marker: marker::PhantomData<T>,  // thonk
 }
 
 
 impl<T: BooruRequestor> BooruResponse<T> {
-    fn new(image_url: String, tags: String, source_url: Option<String>) -> BooruResponse<T> {
+    fn new(image_url: String, tags: String, page_url: String) -> BooruResponse<T> {
 
         debug!("creating with image_url: {}", image_url);
 
         BooruResponse {
             image_url,
             tags,
-            source_url,
+            page_url,
             _marker: marker::PhantomData,
         }
     }
@@ -64,11 +64,8 @@ impl<T: BooruRequestor> BooruResponse<T> {
         let mut e = e.colour(0xc3569f)
                      .title(format!("Booru response for {}", T::booru_name()))
                      .image(&self.image_url)
+                     .url(&self.page_url)
                      .field("Tags", &tags, true);
-
-        if let Some(s) = self.source_url.as_ref() {
-            e = e.url(s);
-        }
 
         if let Some(s) = T::thumburl() {
             e = e.thumbnail(s);
@@ -82,8 +79,8 @@ impl<T: BooruRequestor> BooruResponse<T> {
 trait BooruRequestor
     where Self: Sized,
 {
-    fn search_for(client: &reqwest::Client, tags: &Vec<String>, extra_params: Option<Vec<(&'static str, String)>>) -> Result<String, &'static str> {
-        let mut params = Self::params(&tags);
+    fn search_for(client: &reqwest::Client, tags: Vec<String>, extra_params: Option<Vec<(&'static str, String)>>) -> Result<String, &'static str> {
+        let mut params = Self::params(tags);
         if let Some(p) = extra_params {
             params.extend(p);
         }
@@ -108,7 +105,7 @@ trait BooruRequestor
         format!("{}{}", Self::base_url(), Self::extension())
     }
 
-    fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
+    fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
         vec![("tags", tags.iter().join(" "))]
     }
 
@@ -140,37 +137,40 @@ trait BooruRequestor
         serde_json::from_str(val).map_err(|_| "Failed to parse response")
     }
 
+    fn get_page(val: &Value) -> Result<String, &'static str> {
+        let id = val["id"].as_u64().ok_or("Invalid api response")?;
+
+        Ok(format!("{}/{}{}", Self::base_url(), Self::page_path(), id))
+    }
+
     fn url_key() -> &'static str {
         "file_url"
     }
 
-    fn response_keys() -> (&'static str, &'static str, Option<&'static str>) {
-        (Self::url_key(), "tags", Some("source"))
+    fn tag_key() -> &'static str {
+        "tags"
     }
 
-    fn search(client: &reqwest::Client, tags: &Vec<String>,
+    fn page_path() -> &'static str;
+
+    fn search(client: &reqwest::Client, tags: Vec<String>,
               extra_params: Option<Vec<(&'static str, String)>>
     ) -> Result<BooruResponse<Self>, &'static str>
     {
-        let resp = Self::search_for(&client, &tags, extra_params)?;
+        let resp = Self::search_for(&client, tags, extra_params)?;
         let parsed = Self::parse_response(&resp)?;
         let selected = Self::select_response(&client, &parsed, Self::url_key())?;
 
-        let (image_url_key, tag_key, source_key) = Self::response_keys();
-
         Ok(BooruResponse::new(
-            selected[&image_url_key]
+            selected[Self::url_key()]
                 .as_str()
                 .map(|s| s.to_owned())
                 .ok_or("No image url found")?,
-            selected[&tag_key]
+            selected[Self::tag_key()]
                 .as_str()
                 .map(|s| s.to_owned())
                 .ok_or("No tags found")?,
-            source_key
-                .and_then(|k| selected[&k]
-                          .as_str()
-                          .map(|s| s.to_owned()))
+            Self::get_page(selected)?
         ))
 
     }
@@ -201,11 +201,11 @@ impl BooruRequestor for Ninja {
         "url"
     }
 
-    fn response_keys() -> (&'static str, &'static str, Option<&'static str>) {
-        (Self::url_key(), "tag", Some("sourceURL"))
+    fn page_path() -> &'static str {
+        unimplemented!()
     }
 
-    fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
+    fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
         vec![("q", tags.iter().join(" ")), ("o", "r".to_owned())]
     }
 
@@ -235,6 +235,10 @@ impl BooruRequestor for Ninja {
         let parsed: Value = serde_json::from_str(val).map_err(|_| "Failed to parse response")?;
         parsed["results"].as_array().map(|v| v.to_owned()).ok_or("No results found")
     }
+
+    fn get_page(val: &Value) -> Result<String, &'static str> {
+        val["page"].as_str().map(|s| s.to_owned()).ok_or("Invalid api response")
+    }
 }
 
 
@@ -245,7 +249,8 @@ macro_rules! booru_def {
       ext: $ext:expr,
       thumb: $thumb:expr,
       url_key: $url_key:expr,
-      response_keys: ($tag_key:expr, $source_key:expr),
+      tag_key: $tag_key:expr,
+      page_path: $page_path:expr,
       $({ $($extras:tt)* }),*
     ) => (
         struct $booru;
@@ -270,8 +275,12 @@ macro_rules! booru_def {
                 $url_key
             }
 
-            fn response_keys() -> (&'static str, &'static str, Option<&'static str>) {
-                (Self::url_key(), $tag_key, $source_key)
+            fn tag_key() -> &'static str {
+                $tag_key
+            }
+
+            fn page_path() -> &'static str {
+                $page_path
             }
 
             $($($extras)*)*
@@ -285,7 +294,7 @@ macro_rules! booru_def {
 
             let tags = args.multiple::<String>().unwrap_or_else(|_| Vec::new());
 
-            let response = <$booru as BooruRequestor>::search(&client, &tags, None)?;
+            let response = <$booru as BooruRequestor>::search(&client, tags, None)?;
 
             void!(send_message(msg.channel_id, |m| m.embed(|e| response.generate_embed(e))));
         });
@@ -300,10 +309,11 @@ booru_def!(
     ext: "/posts.json",
     thumb: Some("https://i.imgur.com/1Sk5Bp4.png"),
     url_key: "file_url",
-    response_keys: ("tag_string", Some("source")),
+    tag_key: "tag_string",
+    page_path: "posts/",
 
     {
-        fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
+        fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
             vec![("tags", tags.iter().join(" ")), ("random", "true".to_owned())]
         }
     }
@@ -317,7 +327,8 @@ booru_def!(
     ext: "/post/index.json",
     thumb: Some("http://emblemsbf.com/img/63681.jpg"),
     url_key: "file_url",
-    response_keys: ("tags", Some("source")),
+    tag_key: "tags",
+    page_path: "post/show/",
 );
 
 
@@ -328,9 +339,12 @@ booru_def!(
     ext: "/post/index.json",
     thumb: Some("http://emblemsbf.com/img/63681.jpg"),
     url_key: "file_url",
-    response_keys: ("tags", Some("source")),
+    tag_key: "tags",
+    page_path: "post/show/",
 );
 
+
+// https://gelbooru.com/index.php?page=post&s=view&id=4310590
 
 booru_def!(
     booru: GelBooru,
@@ -339,10 +353,11 @@ booru_def!(
     ext: "/index.php",
     thumb: Some("https://i.imgur.com/Aeabusr.png"),
     url_key: "file_url",
-    response_keys: ("tags", None),
+    tag_key: "tags",
+    page_path: "index.php?page=post&s=view&id=",
 
     {
-        fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
+        fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
             vec![("page", "dapi".to_owned()),
                  ("s", "post".to_owned()),
                  ("q", "index".to_owned()),
@@ -361,10 +376,11 @@ booru_def!(
     ext: "/index.php",
     thumb: None,
     url_key: "fixed", // we have a specialist fixup
-    response_keys: ("tags", None),
+    tag_key: "tags",
+    page_path: "index.php?page=post&s=view&id=",
 
     {
-        fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
+        fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
             vec![("page", "dapi".to_owned()),
                  ("s", "post".to_owned()),
                  ("q", "index".to_owned()),
@@ -398,7 +414,8 @@ booru_def!(
     ext: "/post.json",
     thumb: Some("https://i.imgur.com/B6TiG94.png"),
     url_key: "file_url",
-    response_keys: ("tags", Some("source")),
+    tag_key: "tags",
+    page_path: "post/show/",
 );
 
 
@@ -409,9 +426,15 @@ booru_def!(
     ext: "/post/index.json",
     thumb: None,
     url_key: "file_url",
-    response_keys: ("tags", Some("source")),
+    tag_key: "tags",
+    page_path: "post/show/",
 
     {
+        fn params(mut tags: Vec<String>) -> Vec<(&'static str, String)> {
+            tags.push("-rating:e".to_owned());
+            vec![("tags", tags.iter().join(" "))]
+        }
+
         fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
             let mut parsed: Vec<Value> = serde_json::from_str(val).map_err(|_| "Failed to parse response")?;
 
@@ -451,7 +474,7 @@ command!(ninja_cmd(ctx, msg, args) {
     let is_nsfw = msg.channel_id.find().map_or(false, |c| c.is_nsfw());
     let nsfw_key = if is_nsfw { "a" } else { "s" }; // a = any, s = safe
 
-    let response = Ninja::search(&client, &tags, Some(vec![("f", nsfw_key.to_owned())]))?;
+    let response = Ninja::search(&client, tags, Some(vec![("f", nsfw_key.to_owned())]))?;
 
     void!(send_message(msg.channel_id, |m| m.embed(|e| response.generate_embed(e))));
 });
