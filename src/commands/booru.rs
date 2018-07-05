@@ -109,7 +109,7 @@ trait BooruRequestor
     }
 
     fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
-        vec![("tags", tags.iter().join("+"))]
+        vec![("tags", tags.iter().join(" "))]
     }
 
     fn select_response<'a>(client: &reqwest::Client, resps: &'a Vec<Value>,
@@ -124,16 +124,11 @@ trait BooruRequestor
         thread_rng().shuffle(&mut urls);
 
         for (index, url) in urls {
-
-            if url.is_none() {
-                continue;
-            }
-
-            let url = url.unwrap().to_owned();
-
-            if let Ok(r) = client.head(&url).send() {
-                if r.status().is_success() {
-                    return Ok(&resps[index]);
+            if let Some(url) = url {
+                if let Ok(r) = client.head(url).send() {
+                    if r.status().is_success() {
+                        return Ok(&resps[index]);
+                    }
                 }
             }
         }
@@ -211,7 +206,7 @@ impl BooruRequestor for Ninja {
     }
 
     fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
-        vec![("q", tags.iter().join("+")), ("o", "r".to_owned())]
+        vec![("q", tags.iter().join(" ")), ("o", "r".to_owned())]
     }
 
     fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
@@ -309,7 +304,7 @@ booru_def!(
 
     {
         fn params(tags: &Vec<String>) -> Vec<(&'static str, String)> {
-            vec![("tags", tags.iter().join("+")), ("random", "true".to_owned())]
+            vec![("tags", tags.iter().join(" ")), ("random", "true".to_owned())]
         }
     }
 );
@@ -352,7 +347,7 @@ booru_def!(
                  ("s", "post".to_owned()),
                  ("q", "index".to_owned()),
                  ("json", "1".to_owned()),
-                 ("tags", tags.iter().join("+"))
+                 ("tags", tags.iter().join(" "))
             ]
         }
     }
@@ -374,7 +369,7 @@ booru_def!(
                  ("s", "post".to_owned()),
                  ("q", "index".to_owned()),
                  ("json", "1".to_owned()),
-                 ("tags", tags.iter().join("+"))
+                 ("tags", tags.iter().join(" "))
             ]
         }
 
