@@ -1,65 +1,63 @@
 #![feature(vec_remove_item)]
 
-pub mod schema;
 pub mod models;
-#[macro_use] pub mod utils;
+pub mod schema;
+#[macro_use]
+pub mod utils;
 pub mod background_tasks;
 
 mod commands;
 
-#[macro_use] extern crate serenity;
-#[macro_use] extern crate diesel;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate log;
-#[macro_use] extern crate serde_json;
-extern crate serde;
+#[macro_use]
+extern crate serenity;
+#[macro_use]
+extern crate diesel;
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate log;
+#[macro_use]
+extern crate serde_json;
+extern crate base64;
+extern crate chrono;
 extern crate dotenv;
+extern crate itertools;
+extern crate lru_cache;
+extern crate procinfo;
 extern crate r2d2;
 extern crate r2d2_diesel;
-extern crate chrono;
-extern crate typemap;
-extern crate base64;
-extern crate regex;
-extern crate itertools;
 extern crate rand;
-extern crate procinfo;
-extern crate systemstat;
-extern crate whirlpool;
+extern crate regex;
 extern crate reqwest;
-extern crate lru_cache;
-extern crate threadpool;
-extern crate simplelog;
 extern crate rmp_serde;
+extern crate serde;
+extern crate simplelog;
+extern crate systemstat;
+extern crate threadpool;
+extern crate typemap;
+extern crate whirlpool;
 
 use serenity::{
+    client::bridge::gateway::ShardManager,
+    framework::{standard::StandardFramework, Framework},
+    model::{channel::Message,
+            gateway::Ready,
+            guild::Guild,
+            id::GuildId},
     prelude::*,
-    model::{
-        guild::Guild,
-        id::GuildId,
-        channel::Message,
-        gateway::Ready,
-    },
-    client::bridge::gateway::{ShardManager},
-    framework::{
-        Framework,
-        standard::StandardFramework,
-    },
     utils::with_cache,
 };
 
-use diesel::{
-    prelude::*,
-    pg::PgConnection,
-};
+use diesel::{pg::PgConnection, prelude::*};
 use r2d2_diesel::ConnectionManager;
 
-use std::sync::Arc;
-use std::os::unix::net::UnixStream;
-use typemap::Key;
+use log::{LevelFilter, Log, Metadata, Record};
 use lru_cache::LruCache;
-use threadpool::ThreadPool;
-use log::{LevelFilter, Metadata, Record, Log};
 use simplelog::*;
+use std::os::unix::net::UnixStream;
+use std::sync::Arc;
+use threadpool::ThreadPool;
+use typemap::Key;
 use utils::say;
 
 struct Handler;
@@ -80,8 +78,8 @@ impl EventHandler for Handler {
     }
 
     fn message(&self, ctx: Context, msg: Message) {
-        use schema::message;
         use models::NewStoredMessage;
+        use schema::message;
 
         if !commands::markov::message_filter(&msg) {
             return;
@@ -118,8 +116,8 @@ impl EventHandler for Handler {
 
     fn guild_create(&self, ctx: Context, guild: Guild, _new: bool) {
         // use schema::{guild, prefix};
-        use schema;
         use diesel::dsl::exists;
+        use schema;
 
         let pool = extract_pool!(&ctx);
 
@@ -142,21 +140,22 @@ impl EventHandler for Handler {
         debug!(target: "bot", "Got resume: {:?}", evt);
     }
 
-    fn shard_stage_update(&self, _ctx: Context, evt: serenity::client::bridge::gateway::event::ShardStageUpdateEvent) {
+    fn shard_stage_update(
+        &self,
+        _ctx: Context,
+        evt: serenity::client::bridge::gateway::event::ShardStageUpdateEvent,
+    ) {
         debug!(target: "bot", "Got stage update: {:?}", evt);
     }
 }
 
-
 fn ensure_guild(ctx: &Context, g_id: GuildId) {
-    use schema;
     use models::{NewGuild, NewPrefix};
+    use schema;
 
     let pool = extract_pool!(&ctx);
 
-    let new_guild = NewGuild {
-        id: g_id.0 as i64,
-    };
+    let new_guild = NewGuild { id: g_id.0 as i64 };
 
     let default_prefix = NewPrefix {
         guild_id: g_id.0 as i64,
@@ -175,7 +174,6 @@ fn ensure_guild(ctx: &Context, g_id: GuildId) {
         .execute(pool)
         .expect("Couldn't create default prefix");
 }
-
 
 struct ShardManagerContainer;
 
@@ -226,7 +224,6 @@ impl Key for ThreadPoolCache {
     type Value = Arc<Mutex<ThreadPool>>;
 }
 
-
 pub fn connect_socket() -> Option<UnixStream> {
     let messenger_socket = dotenv::var("DISCORD_BOT_MESSENGER_SOCKET").ok()?;
     let message_socket = UnixStream::connect(messenger_socket).ok()?;
@@ -234,19 +231,15 @@ pub fn connect_socket() -> Option<UnixStream> {
     Some(message_socket)
 }
 
-
 lazy_static! {
-    pub static ref MESSENGER_SOCKET: Arc<Mutex<Option<UnixStream>>> = {
-        Arc::new(Mutex::new(connect_socket()))
-    };
+    pub static ref MESSENGER_SOCKET: Arc<Mutex<Option<UnixStream>>> =
+        Arc::new(Mutex::new(connect_socket()));
 }
-
 
 fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>>>> {
     use schema::prefix::dsl::*;
 
     if let Some(g_id) = m.guild_id() {
-
         let mut data = ctx.data.lock();
         {
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
@@ -257,7 +250,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
         }
 
         let mut prefixes = {
-            let pool  = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+            let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
             prefix
                 .filter(guild_id.eq(g_id.0 as i64))
                 .select(pre)
@@ -281,11 +274,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
 
 // Our setup stuff
 fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
-    use serenity::framework::standard::{
-        DispatchError::*,
-        help_commands,
-        HelpBehaviour,
-    };
+    use serenity::framework::standard::{help_commands, DispatchError::*, HelpBehaviour};
 
     use std::collections::HashSet;
 
@@ -298,12 +287,12 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                 data.insert::<OwnerId>(info.owner);
             }
             set
-        },
+        }
         Err(why) => panic!("Couldn't retrieve app info: {:?}", why),
     };
 
     frame
-        .on_dispatch_error(| _ctx, msg, err | {
+        .on_dispatch_error(|_ctx, msg, err| {
             use rand::Rng;
 
             debug!(target: "bot", "handling error: {:?}", err);
@@ -404,14 +393,15 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                 if let Some(ref mut framework) = *framework.lock() {
                     framework.dispatch(ctx.clone(), spoof_message, &*threadpool.lock(), false);
                 };
-
             }
         })
 }
 
-
 pub fn log_message(msg: &str) {
-    let chan_id = dotenv::var("DISCORD_BOT_LOG_CHAN").unwrap().parse::<u64>().unwrap();
+    let chan_id = dotenv::var("DISCORD_BOT_LOG_CHAN")
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
 
     with_cache(|c| {
         if let Some(chan) = c.guild_channel(chan_id) {
@@ -420,13 +410,11 @@ pub fn log_message(msg: &str) {
     });
 }
 
-
 struct DiscordLogger {
     level: LevelFilter,
     config: Config,
     filter_target: String,
 }
-
 
 impl DiscordLogger {
     // fn init(log_level: LevelFilter, config: Config) -> Result<(), SetLoggerError> {
@@ -435,13 +423,15 @@ impl DiscordLogger {
     // }
 
     fn new(log_level: LevelFilter, config: Config, filter_target: &str) -> Box<DiscordLogger> {
-        Box::new(DiscordLogger { level: log_level, config: config, filter_target: filter_target.to_owned() })
+        Box::new(DiscordLogger {
+            level: log_level,
+            config: config,
+            filter_target: filter_target.to_owned(),
+        })
     }
 }
 
-
 impl Log for DiscordLogger {
-
     fn enabled(&self, metadata: &Metadata) -> bool {
         metadata.level() <= self.level
     }
@@ -455,21 +445,23 @@ impl Log for DiscordLogger {
             return;
         }
 
-        log_message(&format!("LOG: {}:{} -- {}", record.level(), record.target(), record.args()));
+        log_message(&format!(
+            "LOG: {}:{} -- {}",
+            record.level(),
+            record.target(),
+            record.args()
+        ));
     }
 
-    fn flush(&self) {
-    }
+    fn flush(&self) {}
 }
-
 
 impl SharedLogger for DiscordLogger {
     fn level(&self) -> LevelFilter {
         self.level
     }
 
-    fn config(&self) -> Option<&Config>
-    {
+    fn config(&self) -> Option<&Config> {
         Some(&self.config)
     }
 
@@ -478,14 +470,11 @@ impl SharedLogger for DiscordLogger {
     }
 }
 
-
 fn main() {
-    CombinedLogger::init(
-        vec![
-            SimpleLogger::new(LevelFilter::Debug, Config::default()),
-            DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
-        ]
-    ).unwrap();
+    CombinedLogger::init(vec![
+        SimpleLogger::new(LevelFilter::Debug, Config::default()),
+        DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
+    ]).unwrap();
 
     let token = dotenv::var("DISCORD_BOT_TOKEN").unwrap();
     let db_url = dotenv::var("DISCORD_BOT_DB").unwrap();
@@ -497,21 +486,22 @@ fn main() {
 
     client.threadpool.set_num_threads(50);
 
-    let setup_fns = &[setup,
-                      commands::tags::setup_tags,
-                      commands::admin::setup_admin,
-                      commands::reminders::setup_reminders,
-                      commands::markov::setup_markov,
-                      commands::misc::setup_misc,
-                      commands::booru::setup_booru,
-                      commands::prefixes::setup_prefixes,
-                      commands::gimage::setup_gimage,
-                      commands::aliases::setup_aliases,
-                     ];
+    let setup_fns = &[
+        setup,
+        commands::tags::setup_tags,
+        commands::admin::setup_admin,
+        commands::reminders::setup_reminders,
+        commands::markov::setup_markov,
+        commands::misc::setup_misc,
+        commands::booru::setup_booru,
+        commands::prefixes::setup_prefixes,
+        commands::gimage::setup_gimage,
+        commands::aliases::setup_aliases,
+    ];
 
-    let framework = setup_fns.iter().fold(
-        StandardFramework::new(),
-        | acc, fun | fun(&mut client, acc));
+    let framework = setup_fns
+        .iter()
+        .fold(StandardFramework::new(), |acc, fun| fun(&mut client, acc));
 
     client.with_framework(framework);
 
