@@ -62,12 +62,12 @@ impl<T: BooruRequestor> BooruResponse<T> {
                        .collect::<String>();
 
         let mut e = e.colour(0xc3569f)
-                     .title(format!("Booru response for {}", T::booru_name()))
+                     .title(format!("Booru response for {}", T::BOORU_NAME))
                      .image(&self.image_url)
                      .url(&self.page_url)
                      .field("Tags", &tags, true);
 
-        if let Some(s) = T::thumburl() {
+        if let Some(s) = T::THUMBURL {
             e = e.thumbnail(s);
         }
 
@@ -96,13 +96,16 @@ trait BooruRequestor
         }
     }
 
-    fn booru_name() -> &'static str;
-    fn base_url() -> &'static str;
-    fn extension() -> &'static str;
-    fn thumburl() -> Option<&'static str>;
+    const BOORU_NAME: &'static str;
+    const BASE_URL: &'static str;
+    const EXTENSION: &'static str;
+    const THUMBURL: Option<&'static str>;
+    const PAGE_PATH: &'static str;
+    const URL_KEY: &'static str = "file_url";
+    const TAG_KEY: &'static str = "tags";
 
     fn full_url() -> String {
-        format!("{}{}", Self::base_url(), Self::extension())
+        format!("{}{}", Self::BASE_URL, Self::EXTENSION)
     }
 
     fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
@@ -140,18 +143,8 @@ trait BooruRequestor
     fn get_page(val: &Value) -> Result<String, &'static str> {
         let id = val["id"].as_u64().ok_or("Invalid api response")?;
 
-        Ok(format!("{}/{}{}", Self::base_url(), Self::page_path(), id))
+        Ok(format!("{}/{}{}", Self::BASE_URL, Self::PAGE_PATH, id))
     }
-
-    fn url_key() -> &'static str {
-        "file_url"
-    }
-
-    fn tag_key() -> &'static str {
-        "tags"
-    }
-
-    fn page_path() -> &'static str;
 
     fn search(client: &reqwest::Client, tags: Vec<String>,
               extra_params: Option<Vec<(&'static str, String)>>
@@ -159,14 +152,14 @@ trait BooruRequestor
     {
         let resp = Self::search_for(&client, tags, extra_params)?;
         let parsed = Self::parse_response(&resp)?;
-        let selected = Self::select_response(&client, &parsed, Self::url_key())?;
+        let selected = Self::select_response(&client, &parsed, Self::URL_KEY)?;
 
         Ok(BooruResponse::new(
-            selected[Self::url_key()]
+            selected[Self::URL_KEY]
                 .as_str()
                 .map(|s| s.to_owned())
                 .ok_or("No image url found")?,
-            selected[Self::tag_key()]
+            selected[Self::TAG_KEY]
                 .as_str()
                 .map(|s| s.to_owned())
                 .ok_or("No tags found")?,
@@ -181,29 +174,18 @@ struct Ninja;
 
 
 impl BooruRequestor for Ninja {
-    fn booru_name() -> &'static str {
-        "Cure.Ninja"
-    }
+    const BOORU_NAME: &'static str = "Cure.Ninja";
 
-    fn base_url() -> &'static str {
-        "https://cure.ninja"
-    }
+    const BASE_URL: &'static str = "https://cure.ninja";
 
-    fn extension() -> &'static str {
-        "/booru/api/json"
-    }
+    const EXTENSION: &'static str = "/booru/api/json";
 
-    fn thumburl() -> Option<&'static str> {
-        None
-    }
+    const THUMBURL: Option<&'static str> = None;
 
-    fn url_key() -> &'static str {
-        "url"
-    }
+    const URL_KEY: &'static str = "url";
 
-    fn page_path() -> &'static str {
-        unimplemented!()
-    }
+    // we don't use this
+    const PAGE_PATH: &'static str = "";
 
     fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
         vec![("q", tags.iter().join(" ")), ("o", "r".to_owned())]
@@ -255,33 +237,19 @@ macro_rules! booru_def {
     ) => (
         struct $booru;
         impl BooruRequestor for $booru {
-            fn booru_name() -> &'static str {
-                stringify!($booru)
-            }
+            const BOORU_NAME: &'static str = stringify!($booru);
 
-            fn base_url() -> &'static str {
-                $base
-            }
+            const BASE_URL: &'static str = $base;
 
-            fn extension() -> &'static str {
-                $ext
-            }
+            const EXTENSION: &'static str = $ext;
 
-            fn thumburl() -> Option<&'static str> {
-                $thumb
-            }
+            const THUMBURL: Option<&'static str> = $thumb;
 
-            fn url_key() -> &'static str {
-                $url_key
-            }
+            const URL_KEY: &'static str = $url_key;
 
-            fn tag_key() -> &'static str {
-                $tag_key
-            }
+            const TAG_KEY: &'static str = $tag_key;
 
-            fn page_path() -> &'static str {
-                $page_path
-            }
+            const PAGE_PATH: &'static str = $page_path;
 
             $($($extras)*)*
         }
@@ -395,7 +363,7 @@ booru_def!(
             for mut elem in &mut parsed {
 
                 let fixed = json!(format!("{}/images/{}/{}",
-                                          Self::base_url(),
+                                          Self::BASE_URL,
                                           elem["directory"].as_str().ok_or("Failed to get a valid response")?,
                                           elem["image"].as_str().ok_or("Failed to get a valid response")?));
 
@@ -440,7 +408,7 @@ booru_def!(
 
             for mut elem in &mut parsed {
 
-                let mut ext = elem[Self::url_key()].as_str()
+                let mut ext = elem[Self::URL_KEY].as_str()
                                                .ok_or("Failed to get a valid response")?
                                                .chars()
                                                .rev()
@@ -451,7 +419,7 @@ booru_def!(
                 let ext = ext.into_iter().collect::<String>();
 
                 let fixed = json!(format!("{}/image/{}.{}",
-                                          Self::base_url(),
+                                          Self::BASE_URL,
                                           elem["md5"].as_str().ok_or("Failed to get a valid response")?,
                                           ext));
 
