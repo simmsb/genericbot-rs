@@ -15,6 +15,8 @@ use serenity;
 use std::fmt::Display;
 use serde_json;
 use itertools::Itertools;
+use rand::Rng;
+use rand;
 
 
 #[macro_use]
@@ -200,4 +202,22 @@ pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
 
 pub fn say<D: Display>(chan_id: ChannelId, content: D) -> serenity::Result<()> {
     send_message(chan_id, |m| m.content(content))
+}
+
+
+pub fn get_random_members(guild_id: GuildId) -> Option<Vec<Member>> {
+    guild_id.find().and_then(|g| {
+        let guild = g.read();
+        let member_ids: Vec<_> = guild.members
+                                      .keys()
+                                      .filter(|u| // no bots thanks
+                                              match u.find() {
+                                                  Some(user) => !user.read().bot,
+                                                  None       => false,
+                                              }
+                                      )
+                                      .collect();
+        let &&member_id = rand::thread_rng().choose(&member_ids)?;
+        guild.member(member_id).ok().map(|m| vec![m.clone()])
+    })
 }

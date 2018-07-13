@@ -21,10 +21,8 @@ use ::{
     PgConnectionManager,
     ensure_guild,
 };
-use utils::{HistoryIterator, say, send_message};
+use utils::{HistoryIterator, say, send_message, get_random_members};
 use itertools::Itertools;
-use rand::Rng;
-use rand;
 use typemap::Key;
 use lru_cache::LruCache;
 
@@ -243,22 +241,7 @@ command!(markov_cmd(ctx, msg, args) {
         )
         .ok()
         .or_else( // this fails us if the vec is empty, so grab a random user
-            || {
-                msg.guild_id.unwrap().find().and_then(|g| {
-                    let guild = g.read();
-                    let member_ids: Vec<_> = guild.members
-                                                  .keys()
-                                                  .filter(|u| // no bots thanks
-                                                      match u.find() {
-                                                          Some(user) => !user.read().bot,
-                                                          None       => false,
-                                                      }
-                                                  )
-                                                  .collect();
-                    let &&member_id = rand::thread_rng().choose(&member_ids)?;
-                    guild.member(member_id).ok().map(|m| vec![m.clone()])
-                })
-            }
+            ||  get_random_members(msg.guild_id.unwrap())
         )
         .ok_or(CommandError::from("Couldn't get any members to markov on"))?;
 
@@ -268,7 +251,6 @@ command!(markov_cmd(ctx, msg, args) {
     let user_names_s = and_comma_split(&user_names);
 
     let user_ids = users.iter().map(|&id| id.0 as i64).collect();
-
     let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, Some(user_ids));
 
     let mut chain = markov::MChain::new();
