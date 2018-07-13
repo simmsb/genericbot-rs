@@ -68,7 +68,7 @@ fn add_prefix(ctx: &Context, p: &str, g_id: GuildId) {
 command!(add_prefix_cmd(ctx, msg, args) {
     let prefix = args.full_quoted();
 
-    add_prefix(&ctx, &prefix, msg.guild_id().unwrap());
+    add_prefix(&ctx, &prefix, msg.guild_id.unwrap());
 
     let resp = MessageBuilder::new()
         .push("Added the prefix: ")
@@ -95,7 +95,7 @@ command!(list_prefixes_cmd(ctx, msg) {
 command!(delete_prefix_cmd(ctx, msg, args) {
     let prefix = args.full_quoted();
 
-    delete_prefix(&ctx, &prefix, msg.guild_id().unwrap());
+    delete_prefix(&ctx, &prefix, msg.guild_id.unwrap());
 
     let resp = MessageBuilder::new()
         .push("Deleted the prefix: ")

@@ -85,7 +85,7 @@ impl EventHandler for Handler {
             return;
         }
 
-        let g_id = match msg.guild_id() {
+        let g_id = match msg.guild_id {
             Some(id) => id,
             None     => return,
         };
@@ -239,7 +239,7 @@ lazy_static! {
 fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>>>> {
     use schema::prefix::dsl::*;
 
-    if let Some(g_id) = m.guild_id() {
+    if let Some(g_id) = m.guild_id {
         let mut data = ctx.data.lock();
         {
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
@@ -324,7 +324,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                          *count += 1;
                      }
 
-                     if let Some(g_id) = msg.guild_id() {
+                     if let Some(g_id) = msg.guild_id {
                          let pool = extract_pool!(&ctx);
 
                          diesel::update(guild.find(g_id.0 as i64))
@@ -353,7 +353,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                 use schema::guild::dsl::*;
                 use schema::tag::dsl::*;
 
-                let g_id = match msg.guild_id() {
+                let g_id = match msg.guild_id {
                     Some(x) => x.0 as i64,
                     None    => return,
                 };

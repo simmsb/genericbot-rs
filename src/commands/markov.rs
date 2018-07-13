@@ -230,7 +230,7 @@ fn average_colours(colours: Vec<Colour>) -> Colour {
 command!(markov_cmd(ctx, msg, args) {
     use utils::{names_for_members, and_comma_split};
 
-    if !check_markov_state(&ctx, msg.guild_id().unwrap()) {
+    if !check_markov_state(&ctx, msg.guild_id.unwrap()) {
         void!(say(msg.channel_id, "You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
         return Ok(());
     }
@@ -238,13 +238,13 @@ command!(markov_cmd(ctx, msg, args) {
     // All this to just get a random user?
     let members: Vec<_> = args.multiple_quoted::<String>()
         .map(|u| u.into_iter() // resolve members
-             .filter_map(|s| try_resolve_user(&s, msg.guild_id().unwrap()).ok())
+             .filter_map(|s| try_resolve_user(&s, msg.guild_id.unwrap()).ok())
              .collect::<Vec<_>>()
         )
         .ok()
         .or_else( // this fails us if the vec is empty, so grab a random user
             || {
-                msg.guild_id().unwrap().find().and_then(|g| {
+                msg.guild_id.unwrap().find().and_then(|g| {
                     let guild = g.read();
                     let member_ids: Vec<_> = guild.members
                                                   .keys()
@@ -264,12 +264,12 @@ command!(markov_cmd(ctx, msg, args) {
 
     let users: Vec<_> = members.iter().map(|m| m.user.read().id).collect();
 
-    let user_names = names_for_members(&users, msg.guild_id().unwrap());
+    let user_names = names_for_members(&users, msg.guild_id.unwrap());
     let user_names_s = and_comma_split(&user_names);
 
     let user_ids = users.iter().map(|&id| id.0 as i64).collect();
 
-    let messages = get_messages(&ctx, msg.guild_id().unwrap().0 as i64, Some(user_ids));
+    let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, Some(user_ids));
 
     let mut chain = markov::MChain::new();
 
@@ -300,7 +300,7 @@ command!(markov_cmd(ctx, msg, args) {
 
 
 command!(markov_all(ctx, msg) {
-    let messages = get_messages(&ctx, msg.guild_id().unwrap().0 as i64, None);
+    let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, None);
     let mut chain = markov::MChain::new();
 
     for msg in &messages {
@@ -325,27 +325,27 @@ command!(markov_all(ctx, msg) {
 
 
 command!(markov_enable(ctx, msg) {
-    let current_state = check_markov_state(&ctx, msg.guild_id().unwrap());
+    let current_state = check_markov_state(&ctx, msg.guild_id.unwrap());
 
     if current_state {
         void!("Markov chains are already enabled here.");
     } else {
-        set_markov(&ctx, msg.guild_id().unwrap().0 as i64, true);
+        set_markov(&ctx, msg.guild_id.unwrap().0 as i64, true);
         void!(say(msg.channel_id, "Enabled markov chains for this guild, now filling messages..."));
-        let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
+        let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64);
         void!(say(msg.channel_id, format!("Build the markov chain with {} messages", count)));
     }
 });
 
 
 command!(markov_disable(ctx, msg) {
-    let current_state = check_markov_state(&ctx, msg.guild_id().unwrap());
+    let current_state = check_markov_state(&ctx, msg.guild_id.unwrap());
 
     if !current_state {
         void!("Markov chains are already disabled here.");
     } else {
-        set_markov(&ctx, msg.guild_id().unwrap().0 as i64, false);
-        drop_messages(&ctx, msg.guild_id().unwrap().0 as i64);
+        set_markov(&ctx, msg.guild_id.unwrap().0 as i64, false);
+        drop_messages(&ctx, msg.guild_id.unwrap().0 as i64);
         void!(say(msg.channel_id, "Disabled markov chains and dropped messages for this guild."));
     }
 });
@@ -353,7 +353,7 @@ command!(markov_disable(ctx, msg) {
 
 command!(fill_markov(ctx, msg) {
     void!(say(msg.channel_id, "Adding messages to the chain."));
-    let count = fill_messages(&ctx, msg.channel_id, msg.guild_id().unwrap().0 as i64);
+    let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64);
     void!(say(msg.channel_id, format!("Inserted {} messages into the chain.", count)));
 });
 

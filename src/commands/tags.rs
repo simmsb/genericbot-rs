@@ -38,7 +38,7 @@ fn insert_tag(ctx: &Context, msg: &Message, key: &String, content: &str) {
 
     let new_tag =  NewTag {
         author_id: msg.author.id.0 as i64,
-        guild_id: msg.guild_id().unwrap().0 as i64,
+        guild_id: msg.guild_id.unwrap().0 as i64,
         key: key,
         text: content,
     };
@@ -106,7 +106,7 @@ command!(add_tag(ctx, msg, args) {
     let key = get_arg!(args, single_quoted, String, key);
     let value = args.iter::<String>().map(|s| s.unwrap()).join(" ");
 
-    if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
+    if let Ok(t) = get_tag(&ctx, msg.guild_id.unwrap().0 as i64, &key) {
         void!(say(msg.channel_id, format!("The tag: {} already exists", t.key)));
     } else if key.len() >= 50 {
         void!(say(msg.channel_id, "Tag keys cannot be longer than 50 characters."));
@@ -120,7 +120,7 @@ command!(add_tag(ctx, msg, args) {
 command!(tag(ctx, msg, args) {
     let key = get_arg!(args, multiple, String, key).join(" ");
 
-    if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
+    if let Ok(t) = get_tag(&ctx, msg.guild_id.unwrap().0 as i64, &key) {
         void!(say(msg.channel_id, t.text));
     } else {
         void!(say(msg.channel_id, "This tag does not exist."));
@@ -131,10 +131,10 @@ command!(tag(ctx, msg, args) {
 command!(delete_tag(ctx, msg, args) {
     let key = get_arg!(args, multiple, String, key).join(" ");
 
-    if let Ok(t) = get_tag(&ctx, msg.guild_id().unwrap().0 as i64, &key) {
+    if let Ok(t) = get_tag(&ctx, msg.guild_id.unwrap().0 as i64, &key) {
 
         let has_manage_messages = with_cache(
-            |cache| cache.guild(msg.guild_id().unwrap()).map_or(
+            |cache| cache.guild(msg.guild_id.unwrap()).map_or(
                 false,
                 |g| g.read().member_permissions(msg.author.id).manage_messages()
             )
@@ -165,8 +165,8 @@ command!(list_tags(ctx, msg, args) {
 
     let start = page * 20;
     let last = (page + 1) * 20 - 1;
-    let tag_list: Vec<Tag> = get_tags_range(&ctx, msg.guild_id().unwrap().0 as i64, page as i64);
-    let tag_count = get_tag_count(&ctx, msg.guild_id().unwrap().0 as i64);
+    let tag_list: Vec<Tag> = get_tags_range(&ctx, msg.guild_id.unwrap().0 as i64, page as i64);
+    let tag_count = get_tag_count(&ctx, msg.guild_id.unwrap().0 as i64);
 
     if start > tag_count {
         void!(say(msg.channel_id, format!("The requested page ({}) is greater than the number of pages ({}).", page, last / 20)));
@@ -175,7 +175,7 @@ command!(list_tags(ctx, msg, args) {
 
     let user_ids: Vec<u64> = tag_list.iter().map(|t| t.author_id as u64).collect();
 
-    let user_names = names_for_members(&user_ids, msg.guild_id().unwrap());
+    let user_names = names_for_members(&user_ids, msg.guild_id.unwrap());
 
     let tag_content = user_names
         .into_iter()
@@ -192,13 +192,13 @@ command!(list_tags(ctx, msg, args) {
 
 
 command!(auto_tags_on(ctx, msg) {
-    set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, true);
+    set_auto_tags(&ctx, msg.guild_id.unwrap().0 as i64, true);
     void!(say(msg.channel_id, "Enabled automatic tags on this guild."));
 });
 
 
 command!(auto_tags_off(ctx, msg) {
-    set_auto_tags(&ctx, msg.guild_id().unwrap().0 as i64, false);
+    set_auto_tags(&ctx, msg.guild_id.unwrap().0 as i64, false);
     void!(say(msg.channel_id, "Disabled automatic tags on this guild."));
 });
 

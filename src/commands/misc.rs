@@ -100,7 +100,7 @@ command!(message_owner(ctx, msg, args) {
         .push(&msg.author.tag())
         .push(format!("({})", msg.author.id));
 
-    let message = if let Some(guild) = msg.guild_id() {
+    let message = if let Some(guild) = msg.guild_id {
         message.push(" in guild: ")
                .push(guild)
     } else {
@@ -118,7 +118,7 @@ macro_rules! x_someone {
         command!($name(_ctx, msg, args) {
             let users: Vec<_> = args.multiple_quoted::<String>()
                 .map(|u| u.into_iter()
-                     .filter_map(|s| try_resolve_user(&s, msg.guild_id().unwrap()).ok())
+                     .filter_map(|s| try_resolve_user(&s, msg.guild_id.unwrap()).ok())
                      .collect())
                 .unwrap_or_else(|_| Vec::new());
 
