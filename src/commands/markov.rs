@@ -64,15 +64,22 @@ fn get_messages(ctx: &Context, g_id: i64, u_ids: Option<Vec<i64>>) -> Vec<String
 }
 
 
-fn set_markov(ctx: &Context, g_id: i64, on: bool) {
+fn set_markov(ctx: &Context, g_id: GuildId, on: bool) {
     use schema::guild::dsl::*;
 
-    let pool = extract_pool!(&ctx);
+    let mut data = ctx.data.lock();
 
-    diesel::update(guild.find(g_id))
+    let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
+
+    diesel::update(guild.find(g_id.0 as i64))
         .set(markov_on.eq(on))
         .execute(pool)
         .unwrap();
+
+    // make sure we update the cache if needed
+    if let Some(val) = data.get_mut::<MarkovStateCache>().unwrap().get_mut(&g_id) {
+        *val = on;
+    };
 }
 
 
@@ -315,9 +322,9 @@ command!(markov_enable(ctx, msg) {
     let current_state = check_markov_state(&ctx, msg.guild_id.unwrap());
 
     if current_state {
-        void!("Markov chains are already enabled here.");
+        void!(say(msg.channel_id, "Markov chains are already enabled here."));
     } else {
-        set_markov(&ctx, msg.guild_id.unwrap().0 as i64, true);
+        set_markov(&ctx, msg.guild_id.unwrap(), true);
         void!(say(msg.channel_id, "Enabled markov chains for this guild, now filling messages..."));
         let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64);
         void!(say(msg.channel_id, format!("Build the markov chain with {} messages", count)));
@@ -329,9 +336,9 @@ command!(markov_disable(ctx, msg) {
     let current_state = check_markov_state(&ctx, msg.guild_id.unwrap());
 
     if !current_state {
-        void!("Markov chains are already disabled here.");
+        void!(say(msg.channel_id, "Markov chains are already disabled here."));
     } else {
-        set_markov(&ctx, msg.guild_id.unwrap().0 as i64, false);
+        set_markov(&ctx, msg.guild_id.unwrap(), false);
         drop_messages(&ctx, msg.guild_id.unwrap().0 as i64);
         void!(say(msg.channel_id, "Disabled markov chains and dropped messages for this guild."));
     }
