@@ -140,14 +140,12 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
                     "set_avatar", |c| c
                         .cmd(set_avatar)
                         .desc("Set the bot's avatar.")
-                        .num_args(0)
                 )
                 .command(
                     "clean_guilds", |c| c
                         .cmd(clean_guilds)
                         .desc("Cleanup guilds from bot db. Does a dry calculation by default.")
                         .usage("{non-dry}")
-                        .max_args(1)
                 )
                 .command(
                     "stop_bot", |c| c

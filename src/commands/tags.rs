@@ -220,7 +220,6 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                         .desc("Retrieve a tag.")
                         .example("\"something\"")
                         .usage("{tag name}")
-                        .num_args(1)
                 )
                 .command(
                     "delete_tag", |c| c
@@ -228,7 +227,6 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                         .desc("Delete a tag, only the owner of the tag, or a member with manage message perms can delete tags.")
                         .example("tag name")
                         .usage("{tag name}")
-                        .num_args(1)
                 )
                 .command(
                     "list_tags", |c| c
@@ -236,7 +234,6 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                         .desc("List tags for this guild.")
                         .example("1 -- lists tags on the first page")
                         .usage("{page}")
-                        .max_args(1)
                 )
                 .command(
                     "auto_tags_on", |c| c
@@ -246,14 +243,12 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                             "used by just saying the prefix followed by the tag. ",
                             "For example, #!my_tag."))
                         .required_permissions(Permissions::ADMINISTRATOR)
-                        .num_args(0)
                 )
                 .command(
                     "auto_tags_off", |c| c
                         .cmd(auto_tags_off)
                         .desc("Disables the prefix only tagging that is enabled by the command: 'auto_tags_on'")
                         .required_permissions(Permissions::ADMINISTRATOR)
-                        .num_args(0)
                 )
     )
 }

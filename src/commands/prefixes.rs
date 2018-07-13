@@ -122,7 +122,6 @@ pub fn setup_prefixes(_client: &mut Client, frame: StandardFramework) -> Standar
                          .example("!!")
                          .usage("{prefix}")
                          .required_permissions(Permissions::ADMINISTRATOR)
-                         .num_args(1)
                 )
                 .command("delete_prefix",
                          |c| c
@@ -131,7 +130,6 @@ pub fn setup_prefixes(_client: &mut Client, frame: StandardFramework) -> Standar
                          .example("!!")
                          .usage("{prefix}")
                          .required_permissions(Permissions::ADMINISTRATOR)
-                         .num_args(1)
                 )
     )
 }

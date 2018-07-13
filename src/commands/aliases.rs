@@ -122,7 +122,6 @@ pub fn setup_aliases(_client: &mut Client, frame: StandardFramework) -> Standard
                         .desc("Deletes an alias for a command")
                         .example("\"something\"")
                         .usage("{alias name}")
-                        .num_args(1)
                 )
     )
 }
