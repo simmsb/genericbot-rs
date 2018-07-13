@@ -151,7 +151,7 @@ pub fn message_filter(msg: &Message) -> bool {
 
 fn crap_filter(msg: &str) -> bool {
     // nonzero length
-    if !(msg.len() > 0) {
+    if msg.len() == 0 {
         return false;
     }
 
