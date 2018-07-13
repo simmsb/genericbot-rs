@@ -1,0 +1,6 @@
+#+TITLE: genericbot TODO
+
+* genericbot Tasks
+** TODO [#C] Markov chains for non-members that have left
+maybe not?
+** TODO [#A] Use Failure crate for as many internal errors
