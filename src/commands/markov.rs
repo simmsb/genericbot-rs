@@ -83,25 +83,19 @@ pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
 
     let mut data = ctx.data.lock();
 
-    {
-        let cache = data.get_mut::<MarkovStateCache>().unwrap();
-        if let Some(val) = cache.get_mut(&g_id) {
-            return *val;
-        }
+    if let Some(val) = data.get_mut::<MarkovStateCache>().unwrap().get_mut(&g_id) {
+        return *val;
     }
 
     let state = {
         let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
-        match guild.find(g_id.0 as i64)
-                .select(markov_on)
-                .first(pool)
-        {
-            Ok(x)  => x,
-            Err(_) => {
-                ensure_guild(&ctx, g_id);
-                false
-            },
-        }
+        guild.find(g_id.0 as i64)
+             .select(markov_on)
+             .first(pool)
+             .unwrap_or_else(|_| {
+                 ensure_guild(&ctx, g_id);
+                 false
+             })
     };
 
     let cache = data.get_mut::<MarkovStateCache>().unwrap();
