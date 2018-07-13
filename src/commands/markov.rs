@@ -300,6 +300,11 @@ command!(markov_cmd(ctx, msg, args) {
 
 
 command!(markov_all(ctx, msg) {
+    if !check_markov_state(&ctx, msg.guild_id.unwrap()) {
+        void!(say(msg.channel_id, "You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
+        return Ok(());
+    }
+
     let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, None);
     let mut chain = markov::MChain::new();
 
