@@ -248,7 +248,7 @@ command!(markov_cmd(ctx, msg, args) {
         )
         .ok()
         .or_else( // this fails us if the vec is empty, so grab a random user
-            ||  get_random_members(msg.guild_id.unwrap())
+            || get_random_members(msg.guild_id.unwrap())
         )
         .ok_or(CommandError::from("Couldn't get any members to markov on"))?;
 

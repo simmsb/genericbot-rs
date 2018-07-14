@@ -4,7 +4,19 @@ use reqwest;
 use reqwest::header;
 use serenity::{framework::standard::StandardFramework, prelude::*};
 use typemap::Key;
+use failure::Error;
 use utils::send_message;
+
+
+#[derive(Debug, Fail)]
+enum ImageError {
+    #[fail(display = "No response from google.")]
+    NoResponse,
+    #[fail(display = "Google did not provide a valid response.")]
+    InvalidResponse,
+    #[fail(display = "No images found for: `{}`", _0)]
+    NoImages(String)
+}
 
 
 struct ImageClient;
@@ -25,37 +37,55 @@ impl ImageClient {
 }
 
 
+struct ImageContext<'a> {
+    client: &'a reqwest::Client,
+    search_term: &'a str,
+}
+
+impl<'a> ImageContext<'a> {
+    fn new(client: &'a reqwest::Client, search_term: &'a str) -> Self {
+        ImageContext {
+            client,
+            search_term,
+        }
+    }
+}
+
+
 struct ImageResponse;
 
 impl ImageResponse {
-    fn params<'a>(search: &'a str) -> Vec<(&'static str, &'a str)> {
-        vec![("q", search), ("tbm", "isch"), ("safe", "high")]
+    fn params<'a>(ctx: &'a ImageContext) -> Vec<(&'static str, &'a str)> {
+        vec![("q", ctx.search_term), ("tbm", "isch"), ("safe", "high")]
     }
 
-    fn search_for(client: &reqwest::Client, search: &str) -> Result<String, &'static str> {
-        let params = Self::params(search);
-        client
+    fn search_for(ctx: &ImageContext) -> Result<String, Error> {
+        let params = Self::params(ctx);
+        ctx.client
             .get("https://www.google.com/search")
             .query(&params)
-            .send().map_err(|_| "No response from google")?
-            .text().map_err(|_| "Invalid response from google")
+            .send().map_err(|_| ImageError::NoResponse)?
+            .text().map_err(|_| Error::from(ImageError::InvalidResponse))
     }
 
-    fn select_response(resp: String) -> Result<String, &'static str> {
+    fn select_response(ctx: &ImageContext, resp: &str) -> Result<String, Error> {
         lazy_static! {
             static ref IMG_REGEX: Regex = Regex::new(r#""ou":"([^"]*)""#).unwrap();
         }
 
-        let images: Vec<_> = IMG_REGEX.captures_iter(&resp).collect();
-        return thread_rng()
+        let images: Vec<_> = IMG_REGEX
+            .captures_iter(resp)
+            .collect();
+
+        thread_rng()
             .choose(&images)
             .map(|s| s.get(1).unwrap().as_str().to_owned())
-            .ok_or("No images found");
+            .ok_or(Error::from(ImageError::NoImages(ctx.search_term.to_owned())))
     }
 
-    fn search(client: &reqwest::Client, search: &str) -> Result<String, &'static str> {
-        let resp = Self::search_for(&client, search)?;
-        Self::select_response(resp)
+    fn search(ctx: &ImageContext) -> Result<String, Error> {
+        let resp = Self::search_for(ctx)?;
+        Self::select_response(ctx, &resp)
     }
 }
 
@@ -68,7 +98,8 @@ command!(gimage_cmd(ctx, msg, args) {
         lock.get::<ImageClient>().unwrap().clone()
     };
 
-    let resp = ImageResponse::search(&client, &search)?;
+    let ctx = ImageContext::new(&client, search);
+    let resp = ImageResponse::search(&ctx)?;
 
     void!(send_message(msg.channel_id, |m| m.embed(
         |e| e.colour(0xaf38e4)
@@ -79,10 +110,8 @@ command!(gimage_cmd(ctx, msg, args) {
 
 
 pub fn setup_gimage(client: &mut Client, frame: StandardFramework) -> StandardFramework {
-    {
-        let mut data = client.data.lock();
-        data.insert::<ImageClient>(ImageClient::generate());
-    }
+    let mut data = client.data.lock();
+    data.insert::<ImageClient>(ImageClient::generate());
 
     frame
         .bucket("gimage_bucket", 3, 10, 2)

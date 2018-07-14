@@ -24,8 +24,49 @@ macro_rules! extract_pool {
 }
 
 
+/// Macro for discarding the result of a `#[must_use]` function
 macro_rules! void {
     ( $d:expr ) => (
         { let _ = $d; }
+    )
+}
+
+
+/// Continues on a loop if a `Option` is not `Some`
+///
+/// `try_opt_continue!(X)` is equivalent to:
+///
+/// ```rust,ignore
+/// match X {
+///     Some(x) => x,
+///     _       => continue,
+/// }
+/// ```
+macro_rules! try_opt_continue {
+    ( $e:expr ) => (
+        match $e {
+            Some(x) => x,
+            _       => continue,
+        }
+    )
+}
+
+
+/// Continues on a loop if a `Result` is not an `Ok`
+///
+/// `try_continue!(X)` is equivalent to:
+///
+/// ```rust,ignore
+/// match X {
+///     Ok(x) => x,
+///     _     => continue,
+/// }
+/// ```
+macro_rules! try_continue {
+    ( $e:expr ) => (
+        match $e {
+            Ok(x) => x,
+            _     => continue,
+        }
     )
 }

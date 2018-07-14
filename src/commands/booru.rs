@@ -13,7 +13,20 @@ use itertools::Itertools;
 use rand::{Rng, thread_rng};
 use typemap::Key;
 use std::marker;
+use failure::Error;
 use utils::{nsfw_check, send_message};
+
+
+#[derive(Debug, Fail)]
+enum BooruError {
+    #[fail(display = "The booru did not respond.")]
+    NoResponse,
+    #[fail(display = "The booru did not provide a valid response.")]
+    InvalidResponse,
+    #[fail(display = "No images found for tags: `{}`.", _0)]
+    NoImages(String),
+}
+
 
 struct BooruClient;
 
@@ -39,7 +52,6 @@ struct BooruResponse<T: BooruRequestor> {
     page_url: String,
     _marker: marker::PhantomData<T>,  // thonk
 }
-
 
 impl<T: BooruRequestor> BooruResponse<T> {
     fn new(image_url: String, tags: String, page_url: String) -> BooruResponse<T> {
@@ -76,24 +88,34 @@ impl<T: BooruRequestor> BooruResponse<T> {
 }
 
 
-trait BooruRequestor
-    where Self: Sized,
-{
-    fn search_for(client: &reqwest::Client, tags: Vec<String>, extra_params: Option<Vec<(&'static str, String)>>) -> Result<String, &'static str> {
-        let mut params = Self::params(tags);
-        if let Some(p) = extra_params {
-            params.extend(p);
+struct BooruContext<'a> {
+    client: &'a reqwest::Client,
+    tags: &'a Vec<String>,
+    params: Option<Vec<(&'static str, String)>>,
+}
+
+impl<'a> BooruContext<'a> {
+    fn new(client: &'a reqwest::Client, tags: &'a Vec<String>, params: Option<Vec<(&'static str, String)>>) -> Self {
+        BooruContext {
+            client,
+            tags,
+            params,
+        }
+    }
+}
+
+
+trait BooruRequestor: Sized {
+    fn search_for(ctx: &BooruContext) -> Result<String, Error> {
+        let mut params = Self::params(ctx);
+        if let Some(ref p) = ctx.params {
+            params.extend(p.clone());
         }
 
-        let resp = client.get(&Self::full_url())
-                         .query(&params)
-                         .send().map_err(|_| "No response from api")?
-                         .text().map_err(|_| "Failed api response")?;
-        if resp.is_empty() {
-            Err("No images found.")
-        } else {
-            Ok(resp)
-        }
+        ctx.client.get(&Self::full_url())
+              .query(&params)
+              .send().map_err(|_| BooruError::NoResponse)?
+              .text().map_err(|_| Error::from(BooruError::InvalidResponse))
     }
 
     const BOORU_NAME: &'static str;
@@ -108,13 +130,14 @@ trait BooruRequestor
         format!("{}{}", Self::BASE_URL, Self::EXTENSION)
     }
 
-    fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
-        vec![("tags", tags.iter().join(" "))]
+    fn params(ctx: &BooruContext) -> Vec<(&'static str, String)> {
+        vec![("tags", ctx.tags.iter().join(" "))]
     }
 
-    fn select_response<'a>(client: &reqwest::Client, resps: &'a Vec<Value>,
-                       key: &'static str) -> Result<&'a Value, &'static str>
+    fn select_response<'a>(ctx: &BooruContext, resps: &'a Vec<Value>,
+                           key: &'static str) -> Result<&'a Value, Error>
     {
+        // get all the image urls from each response
         let mut urls: Vec<_> = resps
             .iter()
             .map(|v| v[&key].as_str())
@@ -123,46 +146,43 @@ trait BooruRequestor
 
         thread_rng().shuffle(&mut urls);
 
+        // for each url, check that a HTTP HEAD on the url gives a result
         for (index, url) in urls {
-            if let Some(url) = url {
-                if let Ok(r) = client.head(url).send() {
-                    if r.status().is_success() {
-                        return Ok(&resps[index]);
-                    }
-                }
+            let url = try_opt_continue!(url);
+            let resp = try_continue!(ctx.client.head(url).send());
+
+            if resp.status().is_success() {
+                return Ok(&resps[index]);
             }
         }
 
-        Err("No valid responses")
+        Err(Error::from(BooruError::NoImages(ctx.tags.iter().join(" "))))
     }
 
-    fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
-        serde_json::from_str(val).map_err(|_| "Failed to parse response")
+    fn parse_response(val: &str) -> Result<Vec<Value>, Error> {
+        serde_json::from_str(val).map_err(|_| Error::from(BooruError::InvalidResponse))
     }
 
-    fn get_page(val: &Value) -> Result<String, &'static str> {
-        let id = val["id"].as_u64().ok_or("Invalid api response")?;
+    fn get_page(val: &Value) -> Result<String, Error> {
+        let id = val["id"].as_u64().ok_or(BooruError::InvalidResponse)?;
 
         Ok(format!("{}/{}{}", Self::BASE_URL, Self::PAGE_PATH, id))
     }
 
-    fn search(client: &reqwest::Client, tags: Vec<String>,
-              extra_params: Option<Vec<(&'static str, String)>>
-    ) -> Result<BooruResponse<Self>, &'static str>
-    {
-        let resp = Self::search_for(&client, tags, extra_params)?;
+    fn search(ctx: &BooruContext) -> Result<BooruResponse<Self>, Error> {
+        let resp = Self::search_for(ctx)?;
         let parsed = Self::parse_response(&resp)?;
-        let selected = Self::select_response(&client, &parsed, Self::URL_KEY)?;
+        let selected = Self::select_response(ctx, &parsed, Self::URL_KEY)?;
 
         Ok(BooruResponse::new(
             selected[Self::URL_KEY]
                 .as_str()
                 .map(|s| s.to_owned())
-                .ok_or("No image url found")?,
+                .ok_or(BooruError::InvalidResponse)?,
             selected[Self::TAG_KEY]
                 .as_str()
                 .map(|s| s.to_owned())
-                .ok_or("No tags found")?,
+                .ok_or(BooruError::InvalidResponse)?,
             Self::get_page(selected)?
         ))
 
@@ -187,39 +207,17 @@ impl BooruRequestor for Ninja {
     // we don't use this
     const PAGE_PATH: &'static str = "";
 
-    fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
-        vec![("q", tags.iter().join(" ")), ("o", "r".to_owned())]
+    fn params(ctx: &BooruContext) -> Vec<(&'static str, String)> {
+        vec![("q", ctx.tags.iter().join(" ")), ("o", "r".to_owned())]
     }
 
-    fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
-        // We used to have to remove some extra crap at the start
-        // we don't now
-        // fn cut_misformed(val: &str) -> Result<&str, &'static str> {
-        //     let mut count = 0;
-
-        //     for (i, c) in val.chars().enumerate() {
-        //         if c == '{' {
-        //             count += 1;
-        //         } else if c == '}' {
-        //             count -= 1;
-
-        //             if count == 0 {
-        //                 // i + 2, to move over the }\n
-        //                 return Ok(&val[(i + 2)..]);
-        //             }
-        //         }
-        //     }
-
-        //     Err("Couldn't fixup json")
-        // }
-
-        // let fixed = cut_misformed(val)?;
-        let parsed: Value = serde_json::from_str(val).map_err(|_| "Failed to parse response")?;
-        parsed["results"].as_array().map(|v| v.to_owned()).ok_or("No results found")
+    fn parse_response(val: &str) -> Result<Vec<Value>, Error> {
+        let parsed: Value = serde_json::from_str(val).map_err(|_| BooruError::InvalidResponse)?;
+        parsed["results"].as_array().map(|v| v.to_owned()).ok_or(Error::from(BooruError::InvalidResponse))
     }
 
-    fn get_page(val: &Value) -> Result<String, &'static str> {
-        val["page"].as_str().map(|s| s.to_owned()).ok_or("Invalid api response")
+    fn get_page(val: &Value) -> Result<String, Error> {
+        val["page"].as_str().map(|s| s.to_owned()).ok_or(Error::from(BooruError::InvalidResponse))
     }
 }
 
@@ -262,7 +260,8 @@ macro_rules! booru_def {
 
             let tags = args.multiple::<String>().unwrap_or_else(|_| Vec::new());
 
-            let response = <$booru as BooruRequestor>::search(&client, tags, None)?;
+            let ctx = BooruContext::new(&client, &tags, None);
+            let response = <$booru as BooruRequestor>::search(&ctx)?;
 
             void!(send_message(msg.channel_id, |m| m.embed(|e| response.generate_embed(e))));
         });
@@ -281,8 +280,8 @@ booru_def!(
     page_path: "posts/",
 
     {
-        fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
-            vec![("tags", tags.iter().join(" ")), ("random", "true".to_owned())]
+        fn params(ctx: &BooruContext) -> Vec<(&'static str, String)> {
+            vec![("tags", ctx.tags.iter().join(" ")), ("random", "true".to_owned())]
         }
     }
 );
@@ -325,12 +324,12 @@ booru_def!(
     page_path: "index.php?page=post&s=view&id=",
 
     {
-        fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
+        fn params(ctx: &BooruContext) -> Vec<(&'static str, String)> {
             vec![("page", "dapi".to_owned()),
                  ("s", "post".to_owned()),
                  ("q", "index".to_owned()),
                  ("json", "1".to_owned()),
-                 ("tags", tags.iter().join(" "))
+                 ("tags", ctx.tags.iter().join(" "))
             ]
         }
     }
@@ -348,24 +347,24 @@ booru_def!(
     page_path: "index.php?page=post&s=view&id=",
 
     {
-        fn params(tags: Vec<String>) -> Vec<(&'static str, String)> {
+        fn params(ctx: &BooruContext) -> Vec<(&'static str, String)> {
             vec![("page", "dapi".to_owned()),
                  ("s", "post".to_owned()),
                  ("q", "index".to_owned()),
                  ("json", "1".to_owned()),
-                 ("tags", tags.iter().join(" "))
+                 ("tags", ctx.tags.iter().join(" "))
             ]
         }
 
-        fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
-            let mut parsed: Vec<Value> = serde_json::from_str(val).map_err(|_| "Failed to parse response")?;
+        fn parse_response(val: &str) -> Result<Vec<Value>, Error> {
+            let mut parsed: Vec<Value> = serde_json::from_str(val).map_err(|_| BooruError::InvalidResponse)?;
 
             for mut elem in &mut parsed {
 
                 let fixed = json!(format!("{}/images/{}/{}",
                                           Self::BASE_URL,
-                                          elem["directory"].as_str().ok_or("Failed to get a valid response")?,
-                                          elem["image"].as_str().ok_or("Failed to get a valid response")?));
+                                          elem["directory"].as_str().ok_or(BooruError::InvalidResponse)?,
+                                          elem["image"].as_str().ok_or(BooruError::InvalidResponse)?));
 
                 elem["fixed"] = fixed;
             }
@@ -398,29 +397,28 @@ booru_def!(
     page_path: "post/show/",
 
     {
-        fn params(mut tags: Vec<String>) -> Vec<(&'static str, String)> {
-            tags.push("-rating:e".to_owned());
-            vec![("tags", tags.iter().join(" "))]
+        fn params(ctx: &BooruContext) -> Vec<(&'static str, String)> {
+            vec![("tags", ctx.tags.iter().chain(&["-rating:e".to_owned()]).join(" "))]
         }
 
-        fn parse_response(val: &str) -> Result<Vec<Value>, &'static str> {
-            let mut parsed: Vec<Value> = serde_json::from_str(val).map_err(|_| "Failed to parse response")?;
+        fn parse_response(val: &str) -> Result<Vec<Value>, Error> {
+            let mut parsed: Vec<Value> = serde_json::from_str(val).map_err(|_| BooruError::InvalidResponse)?;
 
             for mut elem in &mut parsed {
 
                 let mut ext = elem[Self::URL_KEY].as_str()
-                                               .ok_or("Failed to get a valid response")?
-                                               .chars()
-                                               .rev()
-                                               .take(3)
-                                               .collect::<Vec<_>>();
+                                                 .ok_or(BooruError::InvalidResponse)?
+                                                 .chars()
+                                                 .rev()
+                                                 .take(3)
+                                                 .collect::<Vec<_>>();
                 ext.reverse();
 
                 let ext = ext.into_iter().collect::<String>();
 
                 let fixed = json!(format!("{}/image/{}.{}",
                                           Self::BASE_URL,
-                                          elem["md5"].as_str().ok_or("Failed to get a valid response")?,
+                                          elem["md5"].as_str().ok_or(BooruError::InvalidResponse)?,
                                           ext));
 
                 elem["file_url"] = fixed;
@@ -442,7 +440,8 @@ command!(ninja_cmd(ctx, msg, args) {
     let is_nsfw = msg.channel_id.find().map_or(false, |c| c.is_nsfw());
     let nsfw_key = if is_nsfw { "a" } else { "s" }; // a = any, s = safe
 
-    let response = Ninja::search(&client, tags, Some(vec![("f", nsfw_key.to_owned())]))?;
+    let ctx = BooruContext::new(&client, &tags, Some(vec![("f", nsfw_key.to_owned())]));
+    let response = Ninja::search(&ctx)?;
 
     void!(send_message(msg.channel_id, |m| m.embed(|e| response.generate_embed(e))));
 });

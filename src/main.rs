@@ -18,6 +18,8 @@ extern crate lazy_static;
 extern crate log;
 #[macro_use]
 extern crate serde_json;
+#[macro_use]
+extern crate failure;
 extern crate base64;
 extern crate chrono;
 extern crate dotenv;
@@ -89,10 +91,6 @@ impl EventHandler for Handler {
             Some(id) => id,
             None     => return,
         };
-
-        if msg.content.len() < 40 {
-            return;
-        }
 
         if !commands::markov::check_markov_state(&ctx, g_id) {
             return;
@@ -281,11 +279,11 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     let owners = match serenity::http::get_current_application_info() {
         Ok(info) => {
             let mut set = HashSet::new();
-            set.insert(info.owner.id);
-            {
-                let mut data = client.data.lock();
-                data.insert::<OwnerId>(info.owner);
-            }
+            set.insert(info.owner.id.clone());
+
+            let mut data = client.data.lock();
+            data.insert::<OwnerId>(info.owner);
+
             set
         }
         Err(why) => panic!("Couldn't retrieve app info: {:?}", why),

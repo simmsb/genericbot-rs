@@ -3,5 +3,6 @@
 * genericbot Tasks
 ** TODO [#C] Markov chains for non-members that have left
 maybe not?
-** TODO [#A] Use Failure crate for as many internal errors
+** DONE [#A] Use Failure crate for as many internal errors
+CLOSED: [2018-07-14 Sat 17:03]
 ** TODO [#B] Generic indexable pagination stuff for listing reminders/ aliases/ tags...
