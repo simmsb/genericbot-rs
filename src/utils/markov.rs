@@ -64,7 +64,7 @@ impl<'a> MChain<'a> {
 
         let entry = self.map.entry(key).or_insert_with(HashMap::new);
 
-        *entry.entry(val).or_insert(1.0) *= 1.2;
+        *entry.entry(val).or_insert(1.0) *= 1.02;
     }
 
     pub fn generate_string(&self, limit: usize, minimum: usize) -> Option<String> {
@@ -77,7 +77,7 @@ impl<'a> MChain<'a> {
 
         for _ in 0..limit {
             if let Some(r) = self.map.get(&state) {
-                let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: (v * 10.0) as u32, item: k}).collect();
+                let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: v as u32, item: k}).collect();
                 let wc = WeightedChoice::new(&mut dist);
 
                 let next = wc.sample(&mut rng);
