@@ -28,7 +28,7 @@ enum MarkovEntry<'a> {
 
 // Only lives in the lifetime of it's input
 pub struct MChain<'a> {
-    map: HashMap<(MarkovEntry<'a>, MarkovEntry<'a>), HashMap<MarkovEntry<'a>, u32>>,
+    map: HashMap<(MarkovEntry<'a>, MarkovEntry<'a>), HashMap<MarkovEntry<'a>, f32>>,
 }
 
 
@@ -64,7 +64,7 @@ impl<'a> MChain<'a> {
 
         let entry = self.map.entry(key).or_insert_with(HashMap::new);
 
-        *entry.entry(val).or_insert(0) += 1;
+        *entry.entry(val).or_insert(1.0) *= 1.2;
     }
 
     pub fn generate_string(&self, limit: usize, minimum: usize) -> Option<String> {
@@ -77,13 +77,13 @@ impl<'a> MChain<'a> {
 
         for _ in 0..limit {
             if let Some(r) = self.map.get(&state) {
-                let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: v, item: k}).collect();
+                let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: (v * 10.0) as u32, item: k}).collect();
                 let wc = WeightedChoice::new(&mut dist);
 
                 let next = wc.sample(&mut rng);
                 match next {
                     MarkovEntry::Word(w) => { res.push_str(" "); res.push_str(w); },
-                    MarkovEntry::End     => return Some(res),
+                    MarkovEntry::End     => break,
                     MarkovEntry::Start   => unreachable!(),
                 }
                 state = (state.1, *next);
@@ -94,7 +94,7 @@ impl<'a> MChain<'a> {
             return None;
         }
 
-        if res.chars().filter(|&c| !c.is_whitespace()).count() < minimum {
+        if res.chars().filter(|&c| c.is_alphanumeric()).count() < minimum {
             return None;
         }
 
