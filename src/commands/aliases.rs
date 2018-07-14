@@ -4,6 +4,7 @@ use serenity::{
         StandardFramework,
         CommandError,
     },
+    utils::MessageBuilder,
 };
 
 use diesel;
@@ -71,8 +72,42 @@ fn alias_exists(ctx: &Context, u_id: i64, name: &str) -> bool {
         .get_result(pool).expect("Failed to get alias existence")
 }
 
+fn list_aliases(ctx: &Context, u_id: i64) -> Vec<(String, String)> {
+    use schema::command_alias::dsl::*;
 
-// TODO: list aliases, just copy code from reminders
+    let pool = extract_pool!(&ctx);
+
+    command_alias
+        .filter(owner_id.eq(u_id))
+        .order(alias_name)
+        .select((alias_name, alias_value))
+        .load(pool)
+        .unwrap()
+}
+
+
+command!(list_aliases_cmd(ctx, msg) {
+    let aliases = list_aliases(&ctx, msg.author.id.0 as i64);
+
+    if aliases.is_empty() {
+        void!(say(msg.channel_id, "No reminders for this user"));
+        return Ok(());
+    }
+
+    let lines = aliases
+        .into_iter()
+        .zip(1..)
+        .map(|((w, t), i)| format!("{:3} | {:<10} | {}", i, w, t))
+        .join("\n");
+
+    let message = MessageBuilder::new()
+        .push("Reminders for ")
+        .mention(&msg.author)
+        .push_line(": ")
+        .push_codeblock_safe(lines, None);
+
+    void!(say(msg.channel_id, message));
+});
 
 command!(add_alias_cmd(ctx, msg, args) {
     let alias_name = get_arg!(args, single, String, alias_name);
@@ -115,6 +150,7 @@ pub fn setup_aliases(_client: &mut Client, frame: StandardFramework) -> Standard
                         .desc("Create or overwrite an alias for a command, usable only by you.")
                         .example("\"something\" remind 3m tea is ready")
                         .usage("{alias name} {alias value}")
+                        .batch_known_as(&["alias_add"])
                 )
                 .command(
                     "delete_alias", |c| c
@@ -122,6 +158,13 @@ pub fn setup_aliases(_client: &mut Client, frame: StandardFramework) -> Standard
                         .desc("Deletes an alias for a command")
                         .example("\"something\"")
                         .usage("{alias name}")
+                        .batch_known_as(&["alias_delete"])
+                )
+                .command(
+                    "list_aliases", |c| c
+                        .cmd(list_aliases_cmd)
+                        .desc("List your aliases")
+                        .batch_known_as(&["list_alias", "alias_list", "aliases_list"])
                 )
     )
 }

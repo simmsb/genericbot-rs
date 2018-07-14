@@ -4,3 +4,4 @@
 ** TODO [#C] Markov chains for non-members that have left
 maybe not?
 ** TODO [#A] Use Failure crate for as many internal errors
+** TODO [#B] Generic indexable pagination stuff for listing reminders/ aliases/ tags...
