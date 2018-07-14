@@ -64,7 +64,7 @@ impl<'a> MChain<'a> {
 
         let entry = self.map.entry(key).or_insert_with(HashMap::new);
 
-        *entry.entry(val).or_insert(1.0) *= 1.02;
+        *entry.entry(val).or_insert(1.0) *= 1.1;
     }
 
     pub fn generate_string(&self, limit: usize, minimum: usize) -> Option<String> {
