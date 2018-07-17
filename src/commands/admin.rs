@@ -16,7 +16,7 @@ use utils::say;
 
 
 command!(set_avatar(ctx, msg) {
-    for att in msg.attachments.iter() {
+    for att in &msg.attachments {
         let ext = if att.filename.ends_with("png") {
             "png"
         } else if att.filename.ends_with("jpg") || att.filename.ends_with("jpeg") {
@@ -52,7 +52,7 @@ fn empty_guilds(ctx: &Context) -> QueryResult<Vec<i64>> {
 }
 
 
-fn drop_guilds(ctx: &Context, guilds: &Vec<i64>) {
+fn drop_guilds(ctx: &Context, guilds: &[i64]) {
     use schema::guild::dsl::*;
 
     let pool = extract_pool!(&ctx);

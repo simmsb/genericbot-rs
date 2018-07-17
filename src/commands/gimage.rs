@@ -80,7 +80,7 @@ impl ImageResponse {
         thread_rng()
             .choose(&images)
             .map(|s| s.get(1).unwrap().as_str().to_owned())
-            .ok_or(Error::from(ImageError::NoImages(ctx.search_term.to_owned())))
+            .ok_or_else(|| Error::from(ImageError::NoImages(ctx.search_term.to_owned())))
     }
 
     fn search(ctx: &ImageContext) -> Result<String, Error> {

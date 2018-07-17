@@ -56,7 +56,7 @@ pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
 pub fn and_comma_split<T: AsRef<str>>(m: &[T]) -> String {
     let len = m.len();
 
-    let res = match m {
+    match m {
         [] => "".to_owned(),
         [a] => a.as_ref().to_owned(),
         _ => {
@@ -67,9 +67,7 @@ pub fn and_comma_split<T: AsRef<str>>(m: &[T]) -> String {
             res.push_str(m[len - 1].as_ref());
             res
         },
-    };
-
-    return res;
+    }
 }
 
 
@@ -136,7 +134,8 @@ impl Iterator for HistoryIterator {
         if m.is_none() {
             panic!("Messages didn't exist? aborting.");
         }
-        return m;
+
+        m
     }
 }
 
@@ -149,7 +148,7 @@ pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
             return guild.member(u).map_err(|_| ());
         }
 
-        return guild.member_named(s).map(|m| m.clone()).ok_or(());
+        return guild.member_named(s).cloned().ok_or(());
     } else {
         return Err(());
     }

@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    iter::Skip,
+    iter::{Skip, FromIterator},
 };
 use itertools::{
     multizip,
@@ -27,18 +27,13 @@ enum MarkovEntry<'a> {
 }
 
 // Only lives in the lifetime of it's input
+#[derive(Default)]
 pub struct MChain<'a> {
     map: HashMap<(MarkovEntry<'a>, MarkovEntry<'a>), HashMap<MarkovEntry<'a>, f32>>,
 }
 
 
 impl<'a> MChain<'a> {
-    pub fn new() -> MChain<'a> {
-        MChain {
-            map: HashMap::new(),
-        }
-    }
-
     pub fn add_string(&mut self, s: &'a str) {
 
         let sentences = s.split(|c| ".!?\n".contains(c));
@@ -98,6 +93,42 @@ impl<'a> MChain<'a> {
             return None;
         }
 
-        return Some(res);
+        Some(res)
+    }
+}
+
+
+impl<'a> Extend<&'a str> for MChain<'a> {
+    fn extend<I: IntoIterator<Item=&'a str>>(&mut self, iter: I) {
+        for elem in iter {
+            self.add_string(elem);
+        }
+    }
+}
+
+
+impl<'a> FromIterator<&'a str> for MChain<'a> {
+    fn from_iter<I: IntoIterator<Item=&'a str>>(iter: I) -> Self {
+        let mut c = Self::default();
+        c.extend(iter);
+        c
+    }
+}
+
+
+impl<'a> Extend<&'a String> for MChain<'a> {
+    fn extend<I: IntoIterator<Item=&'a String>>(&mut self, iter: I) {
+        for elem in iter {
+            self.add_string(elem);
+        }
+    }
+}
+
+
+impl<'a> FromIterator<&'a String> for MChain<'a> {
+    fn from_iter<I: IntoIterator<Item=&'a String>>(iter: I) -> Self {
+        let mut c = Self::default();
+        c.extend(iter);
+        c
     }
 }

@@ -25,7 +25,7 @@ fn process_usage() -> f64 {
     let end_measure = procinfo::pid::stat_self().unwrap().utime;
 
     let diff = end_measure - start_measure;
-    return diff as f64 / 0.1; // util seconds / 100ms per second
+    diff as f64 / 0.1 // util seconds / 100ms per second
 }
 
 

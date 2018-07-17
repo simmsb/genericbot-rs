@@ -279,7 +279,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     let owners = match serenity::http::get_current_application_info() {
         Ok(info) => {
             let mut set = HashSet::new();
-            set.insert(info.owner.id.clone());
+            set.insert(info.owner.id);
 
             let mut data = client.data.lock();
             data.insert::<OwnerId>(info.owner);
@@ -423,7 +423,7 @@ impl DiscordLogger {
     fn new(log_level: LevelFilter, config: Config, filter_target: &str) -> Box<DiscordLogger> {
         Box::new(DiscordLogger {
             level: log_level,
-            config: config,
+            config,
             filter_target: filter_target.to_owned(),
         })
     }

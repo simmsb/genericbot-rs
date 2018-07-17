@@ -21,7 +21,7 @@ use itertools::Itertools;
 use utils::say;
 
 
-fn get_tag(ctx: &Context, g_id: i64, tag_key: &String) -> QueryResult<Tag> {
+fn get_tag(ctx: &Context, g_id: i64, tag_key: &str) -> QueryResult<Tag> {
     use schema::tag::dsl::*;
 
     let pool = extract_pool!(&ctx);
@@ -32,14 +32,14 @@ fn get_tag(ctx: &Context, g_id: i64, tag_key: &String) -> QueryResult<Tag> {
 }
 
 
-fn insert_tag(ctx: &Context, msg: &Message, key: &String, content: &str) {
+fn insert_tag(ctx: &Context, msg: &Message, key: &str, content: &str) {
     use schema::tag;
     use models::NewTag;
 
     let new_tag =  NewTag {
         author_id: msg.author.id.0 as i64,
         guild_id: msg.guild_id.unwrap().0 as i64,
-        key: key,
+        key,
         text: content,
     };
 
@@ -144,7 +144,7 @@ command!(delete_tag(ctx, msg, args) {
             delete_tag_do(&ctx, t.id);
             void!(say(msg.channel_id, format!("Deleted tag of name: {}.", t.key)));
         } else {
-            void!(say(msg.channel_id, format!("You are not the owner of this tag or do not have manage messages.")));
+            void!(say(msg.channel_id, "You are not the owner of this tag or do not have manage messages."));
         }
     } else {
         void!(say(msg.channel_id, "That tag does not exist."));
@@ -159,7 +159,7 @@ command!(list_tags(ctx, msg, args) {
     let page = args.single::<i64>().unwrap_or(1) - 1;
 
     if page < 0 {
-        void!(say(msg.channel_id, format!("That page does not exist.")));
+        void!(say(msg.channel_id, "That page does not exist."));
         return Ok(());
     }
 

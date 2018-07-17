@@ -1,3 +1,4 @@
+use std::iter::FromIterator;
 use serenity::{
     prelude::*,
     framework::standard::{
@@ -105,7 +106,7 @@ pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
 
     let cache = data.get_mut::<MarkovStateCache>().unwrap();
     cache.insert(g_id, state);
-    return state;
+    state
 }
 
 
@@ -144,13 +145,13 @@ pub fn message_filter(msg: &Message) -> bool {
         return false;
     }
 
-    return true;
+    true
 }
 
 
 fn crap_filter(msg: &str) -> bool {
     // nonzero length
-    if msg.len() == 0 {
+    if msg.is_empty() {
         return false;
     }
 
@@ -164,7 +165,7 @@ fn crap_filter(msg: &str) -> bool {
         return false;
     }
 
-    return true;
+    true
 }
 
 
@@ -211,21 +212,21 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
             .expect("error inserting messages");
     }
 
-    return count;
+    count
 }
 
 
-fn average_colours(colours: Vec<Colour>) -> Colour {
+fn average_colours(colours: &[Colour]) -> Colour {
     let (s_r, s_g, s_b) = colours.iter().fold((0, 0, 0),
-        |(r, g, b), &c| (r + (c.r() as u16).pow(2),
-                         g + (c.g() as u16).pow(2),
-                         b + (c.b() as u16).pow(2))
+        |(r, g, b), &c| (r + u16::from(c.r()).pow(2),
+                         g + u16::from(c.g()).pow(2),
+                         b + u16::from(c.b()).pow(2))
     );
 
     let len = colours.len() as f32;
-    let (a_r, a_g, a_b) = (s_r as f32 / len,
-                           s_g as f32 / len,
-                           s_b as f32 / len);
+    let (a_r, a_g, a_b) = (f32::from(s_r) / len,
+                           f32::from(s_g) / len,
+                           f32::from(s_b) / len);
     let res = (a_r.sqrt() as u8, a_g.sqrt() as u8, a_b.sqrt() as u8);
 
     Colour::from(res)
@@ -247,10 +248,9 @@ command!(markov_cmd(ctx, msg, args) {
              .collect::<Vec<_>>()
         )
         .ok()
-        .or_else( // this fails us if the vec is empty, so grab a random user
-            || get_random_members(msg.guild_id.unwrap())
-        )
-        .ok_or(CommandError::from("Couldn't get any members to markov on"))?;
+        // grab a random user if no valids were passed
+        .or_else(|| get_random_members(msg.guild_id.unwrap()))
+        .ok_or_else(|| CommandError::from("Couldn't get any members to markov on"))?;
 
     let users: Vec<_> = members.iter().map(|m| m.user.read().id).collect();
 
@@ -260,15 +260,11 @@ command!(markov_cmd(ctx, msg, args) {
     let user_ids = users.iter().map(|&id| id.0 as i64).collect();
     let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, Some(user_ids));
 
-    let mut chain = markov::MChain::new();
-
-    for msg in &messages {
-        chain.add_string(&msg);
-    }
+    let chain = markov::MChain::from_iter(&messages);
 
     let colours: Vec<_> = members.iter().filter_map(|ref m| m.colour()).collect();
 
-    let col = average_colours(colours);
+    let col = average_colours(&colours);
 
     for _ in 0..20 { // try 20 times
         if let Some(generated) = chain.generate_string(50, 10) {
@@ -295,11 +291,7 @@ command!(markov_all(ctx, msg) {
     }
 
     let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, None);
-    let mut chain = markov::MChain::new();
-
-    for msg in &messages {
-        chain.add_string(&msg);
-    }
+    let chain = markov::MChain::from_iter(&messages);
 
     for _ in 0..20 {
         if let Some(generated) = chain.generate_string(50, 4) {

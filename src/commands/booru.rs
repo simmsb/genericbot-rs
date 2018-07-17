@@ -83,19 +83,19 @@ impl<T: BooruRequestor> BooruResponse<T> {
             e = e.thumbnail(s);
         }
 
-        return e;
+        e
     }
 }
 
 
 struct BooruContext<'a> {
     client: &'a reqwest::Client,
-    tags: &'a Vec<String>,
+    tags: &'a [String],
     params: Option<Vec<(&'static str, String)>>,
 }
 
 impl<'a> BooruContext<'a> {
-    fn new(client: &'a reqwest::Client, tags: &'a Vec<String>, params: Option<Vec<(&'static str, String)>>) -> Self {
+    fn new(client: &'a reqwest::Client, tags: &'a [String], params: Option<Vec<(&'static str, String)>>) -> Self {
         BooruContext {
             client,
             tags,
@@ -134,7 +134,7 @@ trait BooruRequestor: Sized {
         vec![("tags", ctx.tags.iter().join(" "))]
     }
 
-    fn select_response<'a>(ctx: &BooruContext, resps: &'a Vec<Value>,
+    fn select_response<'a>(ctx: &BooruContext, resps: &'a [Value],
                            key: &'static str) -> Result<&'a Value, Error>
     {
         // get all the image urls from each response
@@ -213,11 +213,15 @@ impl BooruRequestor for Ninja {
 
     fn parse_response(val: &str) -> Result<Vec<Value>, Error> {
         let parsed: Value = serde_json::from_str(val).map_err(|_| BooruError::InvalidResponse)?;
-        parsed["results"].as_array().map(|v| v.to_owned()).ok_or(Error::from(BooruError::InvalidResponse))
+        parsed["results"].as_array()
+                         .map(|v| v.to_owned())
+                         .ok_or_else(|| Error::from(BooruError::InvalidResponse))
     }
 
     fn get_page(val: &Value) -> Result<String, Error> {
-        val["page"].as_str().map(|s| s.to_owned()).ok_or(Error::from(BooruError::InvalidResponse))
+        val["page"].as_str()
+                   .map(|s| s.to_owned())
+                   .ok_or_else(|| Error::from(BooruError::InvalidResponse))
     }
 }
 

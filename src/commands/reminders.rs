@@ -68,7 +68,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
             return Err(CommandError::from("Cannot mix 'tomorrow' and delta times."));
         }
 
-        let val = (&caps["value"]).parse::<u32>()? as i64;
+        let val = i64::from((&caps["value"]).parse::<u32>()?);
         let per = &caps["period"];
 
         if per == "M" || per.starts_with("mon") { // special case for months
@@ -121,7 +121,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
 
         let delta = (day - current_day) % 7;  // if in past, wrap around
 
-        base_time += Duration::days(delta as i64);
+        base_time += Duration::days(i64::from(delta));
 
         has_parsed = true;
     }
@@ -231,7 +231,7 @@ fn delete_reminder(ctx: &Context, u_id: i64, idx: i64) -> bool {
         .bind::<BigInt, i64>(idx)
         .execute(pool);
 
-    return amount.unwrap() > 0;
+    amount.unwrap() > 0
 }
 
 
@@ -259,7 +259,7 @@ pub fn human_timedelta(delta: &Duration) -> String {
         })
         .collect();
 
-    return and_comma_split(&parts);
+    and_comma_split(&parts)
 }
 
 
