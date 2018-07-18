@@ -35,7 +35,7 @@ impl Key for MarkovStateCache {
 }
 
 
-fn get_messages(ctx: &Context, g_id: i64, u_ids: Option<Vec<i64>>) -> Vec<String> {
+fn get_messages(ctx: &Context, g_id: i64, u_ids: Option<Vec<i64>>, count: u32) -> Vec<String> {
     use schema::message::dsl::*;
     use diesel::dsl::any;
 
@@ -50,7 +50,7 @@ fn get_messages(ctx: &Context, g_id: i64, u_ids: Option<Vec<i64>>) -> Vec<String
             .filter(guild_id.eq(g_id))
             .select(msg)
             .order(RANDOM)
-            .limit(7000)
+            .limit(count as i64)
             .load(pool)
             .expect("Error getting messages from DB")
     } else {
@@ -58,7 +58,7 @@ fn get_messages(ctx: &Context, g_id: i64, u_ids: Option<Vec<i64>>) -> Vec<String
             .filter(guild_id.eq(g_id))
             .select(msg)
             .order(RANDOM)
-            .limit(7000)
+            .limit(count as i64)
             .load(pool)
             .expect("Error getting messages from DB")
     }
@@ -169,15 +169,17 @@ fn crap_filter(msg: &str) -> bool {
 }
 
 
-fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
+fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64, message_count: usize) -> usize {
     use schema::message;
     use models::NewStoredMessage;
     use std::{thread, time};
 
-    let iterator = HistoryIterator::new(c_id).chunks(100);
-    let messages = iterator.into_iter().take(40);
+    let chunk_size = 100;
 
-    let pool = extract_pool!(&ctx);
+    let take_amount = message_count / chunk_size;
+
+    let iterator = HistoryIterator::new(c_id).chunks(1000);
+    let messages = iterator.into_iter().take(take_amount);
 
     let mut count: usize = 0;
 
@@ -205,6 +207,7 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64) -> usize {
             })
             .collect();
 
+        let pool = extract_pool!(&ctx);
         diesel::insert_into(message::table)
             .values(&new_messages)
             .on_conflict_do_nothing()
@@ -258,7 +261,10 @@ command!(markov_cmd(ctx, msg, args) {
     let user_names_s = and_comma_split(&user_names);
 
     let user_ids = users.iter().map(|&id| id.0 as i64).collect();
-    let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, Some(user_ids));
+
+    let message_count = if ::SPECIAL_GUILDS.contains(&msg.guild_id.unwrap().0) { 100_000 } else { 20_000 };
+
+    let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, Some(user_ids), message_count);
 
     let chain = markov::MChain::from_iter(&messages);
 
@@ -290,7 +296,9 @@ command!(markov_all(ctx, msg) {
         return Ok(());
     }
 
-    let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, None);
+    let message_count = if ::SPECIAL_GUILDS.contains(&msg.guild_id.unwrap().0) { 100_000 } else { 20_000 };
+
+    let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, None, message_count);
     let chain = markov::MChain::from_iter(&messages);
 
     for _ in 0..20 {
@@ -318,7 +326,10 @@ command!(markov_enable(ctx, msg) {
     } else {
         set_markov(&ctx, msg.guild_id.unwrap(), true);
         void!(say(msg.channel_id, "Enabled markov chains for this guild, now filling messages..."));
-        let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64);
+
+        let message_count = if ::SPECIAL_GUILDS.contains(&msg.guild_id.unwrap().0) { 500_000 } else { 40_000 };
+
+        let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64, message_count);
         void!(say(msg.channel_id, format!("Build the markov chain with {} messages", count)));
     }
 });
@@ -339,7 +350,10 @@ command!(markov_disable(ctx, msg) {
 
 command!(fill_markov(ctx, msg) {
     void!(say(msg.channel_id, "Adding messages to the chain."));
-    let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64);
+
+    let message_count = if ::SPECIAL_GUILDS.contains(&msg.guild_id.unwrap().0) { 500_000 } else { 40_000 };
+
+    let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64, message_count);
     void!(say(msg.channel_id, format!("Inserted {} messages into the chain.", count)));
 });
 

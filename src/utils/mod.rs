@@ -131,6 +131,9 @@ impl Iterator for HistoryIterator {
         }
 
         let m = self.message_vec.pop();
+
+        // we should only be ending the iterator if there are no more messages
+        // upon which we would have exited earlier
         if m.is_none() {
             panic!("Messages didn't exist? aborting.");
         }

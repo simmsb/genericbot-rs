@@ -56,8 +56,11 @@ use r2d2_diesel::ConnectionManager;
 use log::{LevelFilter, Log, Metadata, Record};
 use lru_cache::LruCache;
 use simplelog::*;
-use std::os::unix::net::UnixStream;
-use std::sync::Arc;
+use std::{
+    collections::HashSet,
+    os::unix::net::UnixStream,
+    sync::Arc
+};
 use threadpool::ThreadPool;
 use typemap::Key;
 use utils::say;
@@ -274,8 +277,6 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
 fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     use serenity::framework::standard::{help_commands, DispatchError::*, HelpBehaviour};
 
-    use std::collections::HashSet;
-
     let owners = match serenity::http::get_current_application_info() {
         Ok(info) => {
             let mut set = HashSet::new();
@@ -466,6 +467,11 @@ impl SharedLogger for DiscordLogger {
     fn as_log(self: Box<Self>) -> Box<Log> {
         Box::new(*self)
     }
+}
+
+/// Guilds that are special to me
+lazy_static! {
+    static ref SPECIAL_GUILDS: HashSet<u64> = [189458076842196992u64].iter().cloned().collect();
 }
 
 fn main() {
