@@ -174,7 +174,7 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64, message_count: usize
     use models::NewStoredMessage;
     use std::{thread, time};
 
-    let chunk_size = 100;
+    let chunk_size = 1000;
 
     let take_amount = message_count / chunk_size;
 
@@ -185,7 +185,7 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64, message_count: usize
 
     for chunk in messages {
         // manual sleep here because discord likes to global rl us
-        thread::sleep(time::Duration::from_secs(5));
+        thread::sleep(time::Duration::from_secs(2));
 
         let messages: Vec<_> = chunk.filter(message_filter).collect();
 
