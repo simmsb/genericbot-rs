@@ -178,7 +178,7 @@ fn fill_messages(ctx: &Context, c_id: ChannelId, g_id: i64, message_count: usize
 
     let take_amount = message_count / chunk_size;
 
-    let iterator = HistoryIterator::new(c_id).chunks(1000);
+    let iterator = HistoryIterator::new(c_id).chunks(chunk_size);
     let messages = iterator.into_iter().take(take_amount);
 
     let mut count: usize = 0;

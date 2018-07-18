@@ -126,7 +126,17 @@ impl Iterator for HistoryIterator {
                     self.message_vec.extend(messages);
                     self.last_id = self.message_vec.last().map(|m| m.id);
                 },
-                Err(why) => panic!(format!("Couldn't get messages: {}, aborting.", why)),
+                Err(why) => {
+                    if let serenity::Error::Http(HttpError::UnsuccessfulRequest(ref resp)) = why {
+                        if resp.status.is_server_error() {
+                            // haha yes, just try again
+                            // thanks discord
+                            return self.next();
+                        }
+                    }
+                    panic!(format!("Couldn't get messages: {:?}, aborting.", why))
+
+                },
             }
         }
 
