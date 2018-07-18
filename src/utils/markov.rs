@@ -63,6 +63,7 @@ impl<'a> MChain<'a> {
     }
 
     pub fn generate_string(&self, limit: usize, minimum: usize) -> Option<String> {
+        use std::u32;
         use rand::distributions::{Weighted, WeightedChoice, Distribution};
 
         let mut res = String::new();
@@ -72,7 +73,18 @@ impl<'a> MChain<'a> {
 
         for _ in 0..limit {
             if let Some(r) = self.map.get(&state) {
+                let sum: usize = r.iter().map(|(_, &v)| v as usize).sum();
+
                 let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: v as u32, item: k}).collect();
+
+                if sum > u32::MAX as usize {
+                    // If the sum of each value is greater than a u32 size, we need to shrink our weights
+                    let ratio = (sum / u32::MAX as usize) as u32;
+                    for mut v in &mut dist {
+                        v.weight /= ratio;
+                    }
+                }
+
                 let wc = WeightedChoice::new(&mut dist);
 
                 let next = wc.sample(&mut rng);
