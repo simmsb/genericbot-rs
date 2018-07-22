@@ -33,11 +33,11 @@ extern crate regex;
 extern crate reqwest;
 extern crate rmp_serde;
 extern crate serde;
-extern crate simplelog;
 extern crate systemstat;
 extern crate threadpool;
 extern crate typemap;
 extern crate whirlpool;
+extern crate fern;
 
 use serenity::{
     client::bridge::gateway::ShardManager,
@@ -55,7 +55,6 @@ use r2d2_diesel::ConnectionManager;
 
 use log::{LevelFilter, Log, Metadata, Record};
 use lru_cache::LruCache;
-use simplelog::*;
 use std::{
     collections::HashSet,
     os::unix::net::UnixStream,
@@ -266,12 +265,67 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
             let prefixes = Arc::new(RwLock::new(prefixes));
             cache.insert(g_id, prefixes.clone());
-            Some(prefixes.clone())
+            Some(prefixes)
         }
     } else {
         None
     }
 }
+
+
+/// Process possible tag activations
+fn process_tag(ctx: &mut Context, msg: &Message, cmd_name: &str) {
+    use schema::guild::dsl::*;
+    use schema::tag::dsl::*;
+
+    let g_id = match msg.guild_id {
+        Some(x) => x.0 as i64,
+        None    => return,
+    };
+
+    let pool = extract_pool!(&ctx);
+
+    let has_auto_tags = guild
+        .find(&g_id)
+        .select(tag_prefix_on)
+        .first(pool)
+        .unwrap_or(false);
+
+    if has_auto_tags {
+        if let Ok(r_tag) = tag
+            .filter(guild_id.eq(&g_id))
+            .filter(key.eq(cmd_name))
+            .select(text)
+            .first::<String>(pool) {
+                void!(say(msg.channel_id, r_tag));
+            }
+    }
+}
+
+
+/// Process possible alias activations
+fn process_alias(ctx: &mut Context, msg: &Message, cmd_name: &str) {
+    use commands::aliases::get_alias;
+
+    if let Some(alias) = get_alias(&ctx, &cmd_name, msg.author.id.0 as i64) {
+        // we need to be careful here, as to not keep the data locked when we dispatch the command
+        let (mut framework, threadpool) = {
+            let lock = ctx.data.lock();
+            let framework = lock.get::<FrameworkContainer>().unwrap().clone();
+            let threadpool = lock.get::<ThreadPoolCache>().unwrap().clone();
+            (framework, threadpool)
+        };
+        let alias_message = format!("generic#{}", alias);
+
+        let mut spoof_message = msg.clone();
+        spoof_message.content = alias_message;
+
+        if let Some(ref mut framework) = *framework.lock() {
+            framework.dispatch(ctx.clone(), spoof_message, &*threadpool.lock(), false);
+        };
+    }
+}
+
 
 // Our setup stuff
 fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
@@ -317,14 +371,12 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 
              match err {
                  Ok(_) => {
-                     {
-                         let lock = ctx.data.lock(); ;
-                         let mut count = lock.get::<CmdCounter>().unwrap().write();
-                         *count += 1;
-                     }
+                     let lock = ctx.data.lock(); ;
+                     let mut count = lock.get::<CmdCounter>().unwrap().write();
+                     *count += 1;
 
                      if let Some(g_id) = msg.guild_id {
-                         let pool = extract_pool!(&ctx);
+                         let pool = &*lock.get::<PgConnectionManager>().unwrap().get().unwrap();
 
                          diesel::update(guild.find(g_id.0 as i64))
                              .set(commands_from.eq(commands_from + 1))
@@ -347,52 +399,8 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                          .suggestion_text("No command with the name '{}' was found.")
                          .lacking_permissions(HelpBehaviour::Hide))
         .unrecognised_command(|ctx, msg, cmd_name| {
-            use commands::aliases::get_alias;
-            {
-                use schema::guild::dsl::*;
-                use schema::tag::dsl::*;
-
-                let g_id = match msg.guild_id {
-                    Some(x) => x.0 as i64,
-                    None    => return,
-                };
-
-                let pool = extract_pool!(&ctx);
-
-                let has_auto_tags = guild
-                    .find(&g_id)
-                    .select(tag_prefix_on)
-                    .first(pool)
-                    .unwrap_or(false);
-
-                if has_auto_tags {
-                    if let Ok(r_tag) = tag
-                        .filter(guild_id.eq(&g_id))
-                        .filter(key.eq(cmd_name))
-                        .select(text)
-                        .first::<String>(pool) {
-                            void!(say(msg.channel_id, r_tag));
-                        }
-                }
-            }
-
-            if let Some(alias) = get_alias(&ctx, &cmd_name, msg.author.id.0 as i64) {
-                // we need to be careful here, as to not keep the data locked when we dispatch the command
-                let (mut framework, threadpool) = {
-                    let lock = ctx.data.lock();
-                    let framework = lock.get::<FrameworkContainer>().unwrap().clone();
-                    let threadpool = lock.get::<ThreadPoolCache>().unwrap().clone();
-                    (framework, threadpool)
-                };
-                let alias_message = format!("generic#{}", alias);
-
-                let mut spoof_message = msg.clone();
-                spoof_message.content = alias_message;
-
-                if let Some(ref mut framework) = *framework.lock() {
-                    framework.dispatch(ctx.clone(), spoof_message, &*threadpool.lock(), false);
-                };
-            }
+            process_tag(ctx, msg, cmd_name);
+            process_alias(ctx, msg, cmd_name);
         })
 }
 
@@ -409,76 +417,42 @@ pub fn log_message(msg: &str) {
     });
 }
 
-struct DiscordLogger {
-    level: LevelFilter,
-    config: Config,
-    filter_target: String,
-}
-
-impl DiscordLogger {
-    // fn init(log_level: LevelFilter, config: Config) -> Result<(), SetLoggerError> {
-    //     set_max_level(log_level.clone());
-    //     set_boxed_logger(DiscordLogger::new(log_level, config))
-    // }
-
-    fn new(log_level: LevelFilter, config: Config, filter_target: &str) -> Box<DiscordLogger> {
-        Box::new(DiscordLogger {
-            level: log_level,
-            config,
-            filter_target: filter_target.to_owned(),
-        })
-    }
-}
-
-impl Log for DiscordLogger {
-    fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= self.level
-    }
-
-    fn log(&self, record: &Record) {
-        if !self.enabled(record.metadata()) {
-            return;
-        }
-
-        if self.filter_target != record.target() {
-            return;
-        }
-
-        log_message(&format!(
-            "LOG: {}:{} -- {}",
-            record.level(),
-            record.target(),
-            record.args()
-        ));
-    }
-
-    fn flush(&self) {}
-}
-
-impl SharedLogger for DiscordLogger {
-    fn level(&self) -> LevelFilter {
-        self.level
-    }
-
-    fn config(&self) -> Option<&Config> {
-        Some(&self.config)
-    }
-
-    fn as_log(self: Box<Self>) -> Box<Log> {
-        Box::new(*self)
-    }
-}
 
 /// Guilds that are special to me
 lazy_static! {
     static ref SPECIAL_GUILDS: HashSet<u64> = [189458076842196992u64].iter().cloned().collect();
 }
 
+
+fn setup_logger() -> Result<(), fern::InitError> {
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{}][{}] {}",
+                record.level(),
+                record.target(),
+                message,
+            ))
+        })
+        .chain(
+            fern::Dispatch::new()
+                .level(log::LevelFilter::Info)
+                .level_for("serenity", log::LevelFilter::Debug)
+                .level_for("genericbot-rs", log::LevelFilter::Warn)
+                .chain(std::io::stdout())
+        )
+        .chain(
+            fern::Dispatch::new()
+                .level(log::LevelFilter::Warn)
+                .level_for("bot", log::LevelFilter::Info)
+                .chain(fern::Output::call(|record| log_message(&format!("{}", record.args()))))
+        )
+        .apply()?;
+    Ok(())
+}
+
 fn main() {
-    CombinedLogger::init(vec![
-        SimpleLogger::new(LevelFilter::Debug, Config::default()),
-        DiscordLogger::new(LevelFilter::Info, Config::default(), "bot"),
-    ]).unwrap();
+    setup_logger().unwrap();
 
     let token = dotenv::var("DISCORD_BOT_TOKEN").unwrap();
     let db_url = dotenv::var("DISCORD_BOT_DB").unwrap();
@@ -488,7 +462,7 @@ fn main() {
 
     let mut client = Client::new(&token, Handler).unwrap();
 
-    client.threadpool.set_num_threads(50);
+    client.threadpool.set_num_threads(16);
 
     let setup_fns = &[
         setup,
