@@ -1,123 +1,121 @@
+use chrono::{Duration, Utc};
+use dotenv;
+use models::Reminder;
+use reqwest;
 use serenity::{
+    model::id::{ChannelId, UserId},
     prelude::*,
     utils,
+    utils::MessageBuilder,
 };
-use serenity;
 use std::{
-    sync::{
-        Once,
-        ONCE_INIT
-    },
-    thread,
-    time,
+    sync::{Once, ONCE_INIT},
+    thread, time,
 };
-use dotenv;
-use ::PgConnectionManager;
-use reqwest;
-use models::Reminder;
-use chrono::{Utc, Duration};
-
+use PgConnectionManager;
 
 static BOTLIST_UPDATE_START: Once = ONCE_INIT;
 static REMINDER_START: Once = ONCE_INIT;
 
-
 pub fn background_task(ctx: &Context) {
     BOTLIST_UPDATE_START.call_once(|| {
-        thread::spawn(
-            move || {
-                info!(target: "bot", "Starting botlist updater process");
-                let botlist_key = match dotenv::var("DISCORD_BOT_LIST_TOKEN") {
-                    Ok(x) => x.to_owned(),
-                    _     => {
-                        warn!(target: "bot", "No botlist token set");
-                        return;
-                    },
-                };
+        thread::spawn(move || {
+            info!(target: "bot", "Starting botlist updater process");
 
-                let bot_id = utils::with_cache(|c| c.user.id);
-                let mut headers = reqwest::header::Headers::new();
-                headers.set(reqwest::header::Authorization(botlist_key.to_owned()));
-                let client = reqwest::Client::builder()
-                    .default_headers(headers)
-                    .build()
-                    .unwrap();
+            let botlist_key = match dotenv::var("DISCORD_BOT_LIST_TOKEN") {
+                Ok(x) => x.to_owned(),
+                _ => {
+                    warn!(target: "bot", "No botlist token set");
+                    return;
+                }
+            };
 
-                loop {
-                    thread::sleep(time::Duration::from_secs(60 * 60));  // every hour
-                    {
-                        let guild_count = utils::with_cache(|c| c.all_guilds().len());
+            let bot_id = utils::with_cache(|c| c.user.id);
 
-                        info!(target: "bot", "Sent update to botlist, with count: {}", guild_count);
+            let mut headers = reqwest::header::Headers::new();
+            headers.set(reqwest::header::Authorization(botlist_key.to_owned()));
 
-                        let resp = client.post(&format!("https://bots.discord.pw/api/bots/{}/stats", bot_id))
-                                         .json(&json!({
-                                             "server_count": guild_count
-                                         }))
-                                         .send();
+            let client = reqwest::Client::builder()
+                .default_headers(headers)
+                .build()
+                .unwrap();
 
-                        if let Ok(mut resp) = resp {
-                            info!(target: "bot", "Response from botlist. status: {}, body: {:?}", resp.status(), resp.text());
-                        }
-                    }
-                }});
+            loop {
+                thread::sleep(time::Duration::from_secs(60 * 60)); // every hour
+                let guild_count = utils::with_cache(|c| c.all_guilds().len());
+
+                info!(target: "bot", "Sent update to botlist, with count: {}", guild_count);
+
+                let resp = client
+                    .post(&format!(
+                        "https://bots.discord.pw/api/bots/{}/stats",
+                        bot_id
+                    ))
+                    .json(&json!({ "server_count": guild_count }))
+                    .send();
+
+                if let Ok(mut resp) = resp {
+                    info!(target: "bot", "Response from botlist. status: {}, body: {:?}", resp.status(), resp.text());
+                }
+            }
+        });
     });
 
     REMINDER_START.call_once(|| {
-        use schema::reminder;
-        use diesel::prelude::*;
         use diesel;
+        use diesel::prelude::*;
+        use schema::reminder;
 
-        let pool = {
-            let lock = ctx.data.lock();
-            lock.get::<PgConnectionManager>().unwrap().clone()
-        };
         let delay_period = Duration::seconds(10);
+        let zero_duration = time::Duration::new(0, 0);
 
-        thread::spawn(
-            move || loop {
-                debug!(target: "bot", "Reminder loop");
+        let data = ctx.data.clone();
 
-                let time_limit = Utc::now().naive_utc() + delay_period;
+        thread::spawn(move || loop {
+            debug!(target: "bot", "Reminder loop");
 
-                let pool = &*pool.get().unwrap();
+            let time_limit = Utc::now().naive_utc() + delay_period;
 
-                if let Ok(reminders) = reminder::dsl::reminder
-                    .filter(reminder::dsl::when.lt(time_limit))
-                    .order(reminder::dsl::when)
-                    .load::<Reminder>(pool)
-                {
-                    if !reminders.is_empty() {
-                        info!(target: "bot", "Collected {} reminders.", reminders.len());
-                    }
+            let pool = &*data
+                .lock()
+                .get::<PgConnectionManager>()
+                .unwrap()
+                .get()
+                .unwrap();
 
-                    for rem in reminders {
-                        let diff = rem.when.signed_duration_since(Utc::now().naive_utc());
-                        let diff = match diff.to_std() {
-                            Ok(diff) => diff,
-                            _        => time::Duration::new(0, 0),
-                        };
-
-                        thread::sleep(diff);
-
-                        send_reminder_msg(&rem);
-
-                        diesel::delete(reminder::dsl::reminder.find(rem.id))
-                            .execute(pool).unwrap();
-                    }
-
+            if let Ok(reminders) = reminder::dsl::reminder
+                .filter(reminder::dsl::when.lt(time_limit))
+                .order(reminder::dsl::when)
+                .load::<Reminder>(pool)
+            {
+                if !reminders.is_empty() {
+                    info!(target: "bot", "Collected {} reminders.", reminders.len());
                 }
 
-                thread::sleep(delay_period.to_std().unwrap());
+                for rem in reminders {
+                    let diff = rem
+                        .when
+                        .signed_duration_since(Utc::now().naive_utc())
+                        .to_std()
+                        .unwrap_or(zero_duration);
+
+                    thread::sleep(diff);
+
+                    send_reminder_msg(&rem);
+
+                    diesel::delete(reminder::dsl::reminder.find(rem.id))
+                        .execute(pool)
+                        .unwrap();
+                }
             }
-        );
+
+            thread::sleep(delay_period.to_std().unwrap());
+        });
     });
 }
 
-
 fn send_reminder_msg(rem: &Reminder) {
     use commands::reminders::human_timedelta;
-    use serenity::utils::MessageBuilder;
 
     let diff = rem.when.signed_duration_since(rem.started);
 
@@ -128,13 +126,13 @@ fn send_reminder_msg(rem: &Reminder) {
         .push(" ago, you asked me to remind you about: ")
         .push_safe(&rem.text);
 
-    let chan = serenity::model::id::ChannelId::from(rem.channel_id as u64);
+    let chan = ChannelId::from(rem.channel_id as u64);
     if chan.say(&content).is_ok() {
         return;
     }
 
-    let user = serenity::model::id::UserId::from(rem.user_id as u64);
+    let user = UserId::from(rem.user_id as u64);
     if let Ok(chan) = user.create_dm_channel() {
-        let _ = chan.say(&content);
+        void!(chan.say(&content));
     }
 }
