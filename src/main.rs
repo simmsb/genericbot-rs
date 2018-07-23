@@ -53,7 +53,6 @@ use serenity::{
 use diesel::{pg::PgConnection, prelude::*};
 use r2d2_diesel::ConnectionManager;
 
-use log::{LevelFilter, Log, Metadata, Record};
 use lru_cache::LruCache;
 use std::{
     collections::HashSet,
@@ -438,7 +437,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
             fern::Dispatch::new()
                 .level(log::LevelFilter::Info)
                 .level_for("serenity", log::LevelFilter::Debug)
-                .level_for("genericbot-rs", log::LevelFilter::Warn)
+                .level_for("bot", log::LevelFilter::Debug)
                 .chain(std::io::stdout())
         )
         .chain(
