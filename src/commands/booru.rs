@@ -115,7 +115,7 @@ trait BooruRequestor: Sized {
         ctx.client.get(&Self::full_url())
               .query(&params)
               .send().map_err(|_| BooruError::NoResponse)?
-              .text().map_err(|_| Error::from(BooruError::InvalidResponse))
+              .text().map_err(|_| BooruError::InvalidResponse.into())
     }
 
     const BOORU_NAME: &'static str;
@@ -156,11 +156,11 @@ trait BooruRequestor: Sized {
             }
         }
 
-        Err(Error::from(BooruError::NoImages(ctx.tags.iter().join(" "))))
+        Err(BooruError::NoImages(ctx.tags.iter().join(" ")).into())
     }
 
     fn parse_response(val: &str) -> Result<Vec<Value>, Error> {
-        serde_json::from_str(val).map_err(|_| Error::from(BooruError::InvalidResponse))
+        serde_json::from_str(val).map_err(|_| BooruError::InvalidResponse.into())
     }
 
     fn get_page(val: &Value) -> Result<String, Error> {
@@ -215,13 +215,13 @@ impl BooruRequestor for Ninja {
         let parsed: Value = serde_json::from_str(val).map_err(|_| BooruError::InvalidResponse)?;
         parsed["results"].as_array()
                          .map(|v| v.to_owned())
-                         .ok_or_else(|| Error::from(BooruError::InvalidResponse))
+                         .ok_or_else(|| BooruError::InvalidResponse.into())
     }
 
     fn get_page(val: &Value) -> Result<String, Error> {
         val["page"].as_str()
                    .map(|s| s.to_owned())
-                   .ok_or_else(|| Error::from(BooruError::InvalidResponse))
+                   .ok_or_else(|| BooruError::InvalidResponse.into())
     }
 }
 

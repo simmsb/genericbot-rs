@@ -1,3 +1,4 @@
+/// Some convenience macro for getting arguments
 macro_rules! get_arg {
     ( $args:ident, $extract_type:ident, $result_type:ty, $name:ident ) => (
         match $args.$extract_type::<$result_type>() {

@@ -65,7 +65,7 @@ impl ImageResponse {
             .get("https://www.google.com/search")
             .query(&params)
             .send().map_err(|_| ImageError::NoResponse)?
-            .text().map_err(|_| Error::from(ImageError::InvalidResponse))
+            .text().map_err(|_| ImageError::InvalidResponse.into())
     }
 
     fn select_response(ctx: &ImageContext, resp: &str) -> Result<String, Error> {
@@ -80,7 +80,7 @@ impl ImageResponse {
         thread_rng()
             .choose(&images)
             .map(|s| s.get(1).unwrap().as_str().to_owned())
-            .ok_or_else(|| Error::from(ImageError::NoImages(ctx.search_term.to_owned())))
+            .ok_or_else(|| ImageError::NoImages(ctx.search_term.to_owned()).into())
     }
 
     fn search(ctx: &ImageContext) -> Result<String, Error> {

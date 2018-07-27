@@ -65,7 +65,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
 
     for caps in TDIFF_RE.captures_iter(date) {
         if has_parsed {
-            return Err(CommandError::from("Cannot mix 'tomorrow' and delta times."));
+            return Err("Cannot mix 'tomorrow' and delta times.".into());
         }
 
         let val = i64::from((&caps["value"]).parse::<u32>()?);
@@ -103,7 +103,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
 
     if let Some(caps) = TDAY_RE.captures(date) {
         if has_parsed {
-            return Err(CommandError::from("Cannot mix weekday and delta time."));
+            return Err("Cannot mix weekday and delta time.".into());
         }
 
         let day = match &(&caps[0])[..2] {
@@ -128,7 +128,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
 
     for caps in DMONTH_RE.captures_iter(date) {
         if has_parsed {
-            return Err(CommandError::from("Cannot mix deltas or have multiple dates and month values."));
+            return Err("Cannot mix deltas or have multiple dates and month values.".into());
         }
 
         let month = &caps["month"];
@@ -166,7 +166,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
     }
 
     if !has_parsed {
-        return Err(CommandError::from("Could not parse time."));
+        return Err("Could not parse time.".into());
     }
 
     let replaced = TDIFF_RE.replace_all(date, "");
