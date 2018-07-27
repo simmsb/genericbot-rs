@@ -104,7 +104,7 @@ fn set_auto_tags(ctx: &Context, g_id: i64, value: bool) {
 
 command!(add_tag(ctx, msg, args) {
     let key = get_arg!(args, single_quoted, String, key);
-    let value = args.iter::<String>().map(|s| s.unwrap()).join(" ");
+    let value = args.rest().trim();
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id.unwrap().0 as i64, &key) {
         void!(say(msg.channel_id, format!("The tag: {} already exists", t.key)));

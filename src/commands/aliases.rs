@@ -111,7 +111,7 @@ command!(list_aliases_cmd(ctx, msg) {
 
 command!(add_alias_cmd(ctx, msg, args) {
     let alias_name = get_arg!(args, single, String, alias_name);
-    let alias_value = args.iter::<String>().map(|s| s.unwrap()).join(" ");
+    let alias_value = args.rest().trim();
 
     let u_id = msg.author.id.0 as i64;
 
