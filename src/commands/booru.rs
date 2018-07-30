@@ -14,7 +14,7 @@ use rand::{Rng, thread_rng};
 use typemap::Key;
 use std::marker;
 use failure::Error;
-use utils::{nsfw_check, send_message};
+use utils::{nsfw_check, send_message, say};
 
 
 #[derive(Debug, Fail)]
@@ -46,14 +46,14 @@ impl BooruClient {
 }
 
 
-struct BooruResponse<T: BooruRequestor> {
+struct BooruResponse<T: ?Sized + BooruRequestor> {
     image_url: String,
     tags: String,
     page_url: String,
     _marker: marker::PhantomData<T>,  // thonk
 }
 
-impl<T: BooruRequestor> BooruResponse<T> {
+impl<T: ?Sized + BooruRequestor> BooruResponse<T> {
     fn new(image_url: String, tags: String, page_url: String) -> BooruResponse<T> {
 
         debug!("creating with image_url: {}", image_url);
@@ -88,6 +88,7 @@ impl<T: BooruRequestor> BooruResponse<T> {
 }
 
 
+#[derive(Clone)]
 struct BooruContext<'a> {
     client: &'a reqwest::Client,
     tags: &'a [String],
@@ -105,7 +106,7 @@ impl<'a> BooruContext<'a> {
 }
 
 
-trait BooruRequestor: Sized {
+trait BooruRequestor {
     fn search_for(ctx: &BooruContext) -> Result<String, Error> {
         let mut params = Self::params(ctx);
         if let Some(ref p) = ctx.params {
@@ -451,6 +452,45 @@ command!(ninja_cmd(ctx, msg, args) {
 });
 
 
+command!(booru_bomb(ctx, msg, args) {
+    use ::ThreadPoolCache;
+
+    let threadpool = {
+        let lock = ctx.data.lock();
+        let threadpool = lock.get::<ThreadPoolCache>().unwrap().lock().clone();
+        threadpool
+    };
+
+    let tags = args.multiple::<String>().unwrap_or_else(|_| Vec::new());
+
+    let channel_id = msg.channel_id;
+
+    macro_rules! run_booru {
+        ( $booru:ident ) => ( {
+            let data = ctx.data.clone();
+            let tags = tags.clone();
+            threadpool.execute(move || {
+                let client = data.lock().get::<BooruClient>().unwrap().clone();
+
+                let b_ctx = BooruContext::new(&client, &tags, None);
+
+                let resp = <$booru as BooruRequestor>::search(&b_ctx);
+                match resp {
+                    Ok(r) => void!(send_message(channel_id, |m| m.embed(|e| r.generate_embed(e)))),
+                    Err(e) => void!(say(channel_id, format!("{}: {}", stringify!($booru), e))),
+                }
+            })
+        } )
+    }
+
+    run_booru!(DanBooru);
+    run_booru!(GelBooru);
+    run_booru!(SafeBooru);
+    run_booru!(Yandere);
+    run_booru!(genericBooru);
+});
+
+
 pub fn setup_booru(client: &mut Client, frame: StandardFramework) -> StandardFramework {
     {
         let mut data = client.data.lock();
@@ -503,6 +543,11 @@ pub fn setup_booru(client: &mut Client, frame: StandardFramework) -> StandardFra
                         .desc("Search genericbooru for images.")
                         .check(nsfw_check)
                         .batch_known_as(&["generic"])
+               )
+               .command("booru_bomb", |c| c
+                        .cmd(booru_bomb)
+                        .desc("Search each booru for an image.")
+                        .check(nsfw_check)
                )
     )
 }
