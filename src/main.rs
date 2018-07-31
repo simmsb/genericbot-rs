@@ -365,7 +365,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
             };
             void!(say(msg.channel_id, &s));
         })
-         .after(| ctx, msg, _, err | {
+         .after(| ctx, msg, cmd_name, err | {
              use schema::guild::dsl::*;
 
              match err {
@@ -383,7 +383,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                              .unwrap();
                      }
                  }
-                 Err(e) => void!(say(msg.channel_id, e.0)),
+                 Err(e) => void!(say(msg.channel_id, format!("{}: {}", cmd_name, e.0))),
              }
          })
         .configure(|c| c
