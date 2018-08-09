@@ -5,11 +5,11 @@ use serenity::{
         StandardFramework,
         CommandError,
     },
-    utils::{
-        MessageBuilder,
-    },
+    utils::MessageBuilder,
+    http,
 };
 use diesel;
+use std::iter;
 use diesel::prelude::*;
 use ::PgConnectionManager;
 use utils::say;
@@ -26,14 +26,12 @@ command!(set_avatar(ctx, msg) {
         };
 
         let content = att.download()?;
-
         let b64 = base64::encode(&content);
-
         let data = format!("data:image/{};base64,{}", ext, b64);
 
-        ctx.edit_profile(
-            |e| e.avatar(Some(&data))
-        )?;
+        let profile_iter = iter::once(("avatar".to_owned(), data.into()));
+
+        http::edit_profile(&profile_iter.collect())?;
 
         void!(say(msg.channel_id, "Set avatar!"));
         return Ok(());
