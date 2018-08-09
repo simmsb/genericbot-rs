@@ -133,12 +133,12 @@ command!(delete_tag(ctx, msg, args) {
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id.unwrap().0 as i64, &key) {
 
-        let has_manage_messages = with_cache(
+        let has_manage_messages = log_time!(with_cache(
             |cache| cache.guild(msg.guild_id.unwrap()).map_or(
                 false,
                 |g| g.read().member_permissions(msg.author.id).manage_messages()
             )
-        );
+        ), "with_cache: has_manage_messages");
 
         if has_manage_messages || (t.author_id as u64 == msg.author.id.0) {
             delete_tag_do(&ctx, t.id);

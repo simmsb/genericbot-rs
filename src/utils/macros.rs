@@ -71,3 +71,17 @@ macro_rules! try_continue {
         }
     )
 }
+
+
+macro_rules! log_time {
+    ( $exp:expr, $name:expr ) => ( {
+        use std::time::Instant;
+
+        let now = Instant::now();
+        let result = $exp;
+        let duration = now.elapsed();
+
+        debug!(target: "bot", "{} on line {} in file {} took {:?} to complete", $name, line!(), file!(), duration);
+        result
+    } )
+}

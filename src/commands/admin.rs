@@ -15,7 +15,7 @@ use ::PgConnectionManager;
 use utils::say;
 
 
-command!(set_avatar(ctx, msg) {
+command!(set_avatar(_ctx, msg) {
     for att in &msg.attachments {
         let ext = if att.filename.ends_with("png") {
             "png"

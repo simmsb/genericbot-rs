@@ -30,7 +30,7 @@ pub fn background_task(ctx: &Context) {
                 }
             };
 
-            let bot_id = utils::with_cache(|c| c.user.id);
+            let bot_id = log_time!(utils::with_cache(|c| c.user.id), "with_cache_lock: get bot id");
 
             let mut headers = reqwest::header::Headers::new();
             headers.set(reqwest::header::Authorization(botlist_key.to_owned()));
@@ -42,7 +42,7 @@ pub fn background_task(ctx: &Context) {
 
             loop {
                 thread::sleep(time::Duration::from_secs(60 * 60)); // every hour
-                let guild_count = utils::with_cache(|c| c.all_guilds().len());
+                let guild_count = log_time!(utils::with_cache(|c| c.all_guilds().len()), "with_cache_lock: get guild len");
 
                 info!(target: "bot", "Sent update to botlist, with count: {}", guild_count);
 

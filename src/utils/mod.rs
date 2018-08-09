@@ -1,4 +1,5 @@
 use serenity::{
+    prelude::*,
     model::{
         id::{GuildId, UserId, MessageId, ChannelId},
         channel::Message,
@@ -9,8 +10,8 @@ use serenity::{
         CommandOptions,
     },
     builder::CreateMessage,
+    utils::with_cache,
 };
-use serenity::prelude::*;
 use serenity;
 use std::fmt::Display;
 use serde_json;
@@ -28,10 +29,6 @@ pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
     where U: Into<UserId> + Copy,
           G: Into<GuildId> + Copy,
 {
-    use serenity::{
-        utils::with_cache,
-    };
-
     fn backup_getter<U>(u_id: U) -> String
         where U: Into<UserId> + Copy,
     {
@@ -41,7 +38,7 @@ pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
         }
     }
 
-    with_cache(
+    log_time!(with_cache(
         |cache| cache.guild(g_id).map(|g| {
             let members = &g.read().members;
             u_ids.iter().map(
@@ -49,7 +46,8 @@ pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
                     || backup_getter(id),
                     |m| m.display_name().to_string()))
                            .collect()
-        })).unwrap_or_else(|| u_ids.iter().map(|&id| backup_getter(id)).collect())
+        })).unwrap_or_else(|| u_ids.iter().map(|&id| backup_getter(id)).collect()),
+              "with_cache: find_members")
 }
 
 
@@ -77,13 +75,12 @@ pub fn insert_missing_guilds(ctx: &Context) {
     use models::NewGuild;
     use schema::guild;
     use ::PgConnectionManager;
-    use serenity::utils::with_cache;
 
     let pool = extract_pool!(&ctx);
 
-    let guilds: Vec<_> = with_cache(|c| c.all_guilds().iter().map(
+    let guilds: Vec<_> = log_time!(with_cache(|c| c.all_guilds().iter().map(
         |&g| NewGuild { id: g.0 as i64 }
-    ).collect());
+    ).collect()), "with_cache: find_new_guilds");
 
     diesel::insert_into(guild::table)
         .values(&guilds)
@@ -220,15 +217,16 @@ pub fn say<D: Display>(chan_id: ChannelId, content: D) -> serenity::Result<()> {
 pub fn get_random_members(guild_id: GuildId) -> Option<Vec<Member>> {
     guild_id.find().and_then(|g| {
         let guild = g.read();
-        let member_ids: Vec<_> = guild.members
-                                      .keys()
-                                      .filter(|u| // no bots thanks
-                                              match u.find() {
-                                                  Some(user) => !user.read().bot,
-                                                  None       => false,
-                                              }
-                                      )
-                                      .collect();
+        let member_ids: Vec<_> =
+            guild.members
+                 .keys()
+                 .filter(|u| // no bots thanks
+                         match u.find() {
+                             Some(user) => !user.read().bot,
+                             None       => false,
+                         }
+                 )
+                 .collect();
         let &&member_id = rand::thread_rng().choose(&member_ids)?;
         guild.member(member_id).ok().map(|m| vec![m.clone()])
     })

@@ -239,8 +239,8 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
     use schema::prefix::dsl::*;
 
     if let Some(g_id) = m.guild_id {
-        let mut data = ctx.data.lock();
         {
+            let mut data = ctx.data.lock();
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
             if let Some(val) = cache.get_mut(&g_id) {
                 trace!("Got prefixes for guild: {}, {:?}", g_id, val);
@@ -249,6 +249,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
         }
 
         let mut prefixes = {
+            let data = ctx.data.lock();
             let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
             prefix
                 .filter(guild_id.eq(g_id.0 as i64))
@@ -261,6 +262,7 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
 
         trace!("Got prefixes for guild: {}, {:?}", g_id, prefixes);
         {
+            let mut data = ctx.data.lock();
             let mut cache = data.get_mut::<PrefixCache>().unwrap();
             let prefixes = Arc::new(RwLock::new(prefixes));
             cache.insert(g_id, prefixes.clone());
@@ -370,12 +372,12 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
 
              match err {
                  Ok(_) => {
-                     let lock = ctx.data.lock(); ;
-                     let mut count = lock.get::<CmdCounter>().unwrap().write();
+                     let data = ctx.data.lock(); ;
+                     let mut count = data.get::<CmdCounter>().unwrap().write();
                      *count += 1;
 
                      if let Some(g_id) = msg.guild_id {
-                         let pool = &*lock.get::<PgConnectionManager>().unwrap().get().unwrap();
+                         let pool = &*data.get::<PgConnectionManager>().unwrap().get().unwrap();
 
                          diesel::update(guild.find(g_id.0 as i64))
                              .set(commands_from.eq(commands_from + 1))
@@ -409,11 +411,9 @@ pub fn log_message(msg: &str) {
         .parse::<u64>()
         .unwrap();
 
-    with_cache(|c| {
-        if let Some(chan) = c.guild_channel(chan_id) {
-            void!(chan.read().say(msg));
-        }
-    });
+    if let Some(chan) = log_time!(with_cache(|c| c.guild_channel(chan_id)), "with_cache: get_log_channel") {
+        void!(chan.read().say(msg));
+    }
 }
 
 
