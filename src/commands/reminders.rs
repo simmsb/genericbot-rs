@@ -22,7 +22,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
     // parse out jan(uary) ... stuff etc
     lazy_static! {
         static ref TDIFF_RE: Regex = Regex::new(concat!(
-            r"(?i)(?:in\s*)?",
+            r"(?:in\s*)?",
             r"(?P<value>\d+)\s*",
             r"(?P<period>",
             r"y(?:ears?)?|",
