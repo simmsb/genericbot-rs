@@ -17,11 +17,12 @@ use itertools::Itertools;
 use utils::say;
 
 
-// TODO: test this function properly.
+/// Parse a text message into a datetime and the remaining string.
 fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDateTime, String), CommandError> {
     // parse out jan(uary) ... stuff etc
     lazy_static! {
         static ref TDIFF_RE: Regex = Regex::new(concat!(
+            r"(?i)(?:in\s*)?",
             r"(?P<value>\d+)\s*",
             r"(?P<period>",
             r"y(?:ears?)?|",
@@ -31,35 +32,41 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
             r"d(?:ays?)?|",
             r"h(?:r|(?:our?))?s?|",
             r"m(?:in(?:ute)?s?)?|",
-            r"s(?:ec(?:ond)?s?)?)"
+            r"s(?:ec(?:ond)?s?)?)",
+            r"\b"
         )).unwrap();
 
-        static ref TDAY_RE: Regex = Regex::new(r"(monday|tuesday|wednesday|thursday|friday|saturday|sunday)").unwrap();
+        static ref TDAY_RE: Regex = Regex::new(r"(?i)(?:on\s*)?(?P<day>monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b").unwrap();
 
         static ref DMONTH_RE: Regex = Regex::new(concat!(
+            r"(?i)(?:on\s*)?",
             r"(?P<month>",
-            r"jan(:?uary)?|",
-            r"feb(:?ruary)?|",
-            r"mar(:?ch)?|",
-            r"apr(:?il)?|",
+            r"jan(?:uary)?|",
+            r"feb(?:ruary)?|",
+            r"mar(?:ch)?|",
+            r"apr(?:il)?|",
             r"may|",
             r"june?|",
             r"july?|",
-            r"aug(:?ust)?|",
-            r"sep(:?tember)?|",
-            r"oct(:?ober)?|",
-            r"nov(:?ember)?|",
-            r"dec(:?ember)?)",
-            r"\s*(?P<value>\d+)"
+            r"aug(?:ust)?|",
+            r"sep(?:tember)?|",
+            r"oct(?:ober)?|",
+            r"nov(?:ember)?|",
+            r"dec(?:ember)?)",
+            r"\s*(?P<value>\d+)",
+            r"(?:th)?",
+            r"\b"
         )).unwrap();
+
+        static ref TOMORROW_RE: Regex = Regex::new(r"(?i)tomorrow\b").unwrap();
     }
 
     let mut has_parsed = false;
 
-    if date.contains("tomorrow") {
+    if TOMORROW_RE.is_match(date) {
         base_time += Duration::days(1);
         has_parsed = true;
-    };
+    }
 
     let mut tdiff_parsed = false;
 
@@ -106,7 +113,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
             return Err("Cannot mix weekday and delta time.".into());
         }
 
-        let day = match &(&caps[0])[..2] {
+        let day = match &(&caps["day"])[..2] {
             "mo" => 0,
             "tu" => 1,
             "we" => 2,
@@ -135,22 +142,22 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
         let day = (&caps["value"]).parse::<u32>()?;
 
         let month_num = match &month[..3] {
-            "jan" => 0,
-            "feb" => 1,
-            "mar" => 2,
-            "apr" => 3,
-            "may" => 4,
-            "jun" => 5,
-            "jul" => 6,
-            "aug" => 7,
-            "sep" => 8,
-            "oct" => 9,
-            "nov" => 10,
-            "dec" => 11,
+            "jan" => 1,
+            "feb" => 2,
+            "mar" => 3,
+            "apr" => 4,
+            "may" => 5,
+            "jun" => 6,
+            "jul" => 7,
+            "aug" => 8,
+            "sep" => 9,
+            "oct" => 10,
+            "nov" => 11,
+            "dec" => 12,
             _     => unreachable!(),
         };
 
-        let current_month_num = base_time.month0();
+        let current_month_num = base_time.month();
 
         let updated_value = if current_month_num <= month_num {
             NaiveDate::from_yo(base_time.year(), 1)
@@ -159,7 +166,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
         };
 
         base_time = updated_value.and_hms(0, 0, 0)
-            .with_month0(month_num).ok_or("Bad month provided.")?
+            .with_month(month_num).ok_or("Bad month provided.")?
             .with_day(day).ok_or("Bad day number provided for that month.")?;
 
         has_parsed = true;
@@ -172,9 +179,10 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
     let replaced = TDIFF_RE.replace_all(date, "");
     let replaced = TDAY_RE.replace_all(&replaced, "");
     let replaced = DMONTH_RE.replace_all(&replaced, "");
-    let replaced = replaced.replace("tomorrow", "")
-                           .trim()
-                           .to_owned();
+    let replaced = TOMORROW_RE.replace_all(&replaced, "");
+    let replaced = replaced
+        .trim()
+        .to_owned();
 
     Ok((base_time, replaced))
 }
@@ -334,8 +342,10 @@ Time Difference
 - (num) m | minutes
 - (num) s | seconds
 
-- Day of Week
-- Month (day)
+Specific time
+=============
+- Day of Week (friday)
+- Month + day (july 4th)
 - Tomorrow
 ```"#)
                          .example("\"3 hours\" Something")
@@ -351,4 +361,73 @@ Time Difference
                          .batch_known_as(&["reminders_delete", "delete_reminder"])
                 )
     )
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    lazy_static! {
+        static ref BASE_TIME: NaiveDateTime = NaiveDateTime::from_timestamp(0, 0);
+    }
+
+    #[test]
+    fn test_date_parser_delta() {
+        let parsed_result = recognise_date(*BASE_TIME, "in 3min do something");
+
+        assert!(parsed_result.is_ok());
+
+        let parsed_result = parsed_result.unwrap();
+
+        assert_eq!(parsed_result, (
+            NaiveDateTime::from_timestamp(60 * 3, 0),
+            "do something".to_owned()
+        ));
+    }
+
+    #[test]
+    fn test_date_parser_tomorrow() {
+        let parsed_result = recognise_date(*BASE_TIME, "tomorrow do something");
+
+        assert!(parsed_result.is_ok());
+
+        let parsed_result = parsed_result.unwrap();
+
+        assert_eq!(parsed_result, (
+            NaiveDateTime::from_timestamp(60 * 60 * 24, 0),
+            "do something".to_owned()
+        ));
+    }
+
+    #[test]
+    fn test_date_parser_day() {
+        // Epoch is thursday, friday is +1 day.
+        let parsed_result = recognise_date(*BASE_TIME, "on friday do something");
+
+        assert!(parsed_result.is_ok());
+
+        let parsed_result = parsed_result.unwrap();
+
+        assert_eq!(parsed_result, (
+            NaiveDateTime::from_timestamp(60 * 60 * 24, 0),
+            "do something".to_owned()
+        ));
+    }
+
+
+    #[test]
+    fn test_date_parser_date() {
+        let parsed_result = recognise_date(*BASE_TIME, "on july 4th do something");
+
+        assert!(parsed_result.is_ok());
+
+        let (parsed_date, remaining) = parsed_result.unwrap();
+
+        assert_eq!(&remaining, "do something");
+
+        assert_eq!(parsed_date.month(), 7);
+
+        assert_eq!(parsed_date.day(), 4);
+    }
 }
