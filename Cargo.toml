@@ -28,7 +28,7 @@ fern = "0.5.6"
 
 [dependencies.serenity]
 git = "https://github.com/nitros12/serenity"
-rev = "2ae4b71166b5e8b42425af086f0b9261e6549ea6"
+rev = "b1d40f99f98a7831662fb1c4b8ec43a72336dd4f"
 
 [dependencies.diesel]
 version = "1.3.2"

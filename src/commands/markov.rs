@@ -4,6 +4,8 @@ use serenity::{
     framework::standard::{
         StandardFramework,
         CommandError,
+        Args,
+        CommandOptions,
     },
     model::{
         id::{
@@ -109,6 +111,13 @@ pub fn check_markov_state(ctx: &Context, g_id: GuildId) -> bool {
     state
 }
 
+pub fn markov_state_check(ctx: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions) -> Result<(), String> {
+    if check_markov_state(&ctx, msg.guild_id.unwrap()) {
+        Ok(())
+    } else {
+        Err("You don't have markov chains enabled, use the 'markov_enable' command to enable them.".to_owned())
+    }
+}
 
 fn drop_messages(ctx: &Context, g_id: i64) {
     use schema::message::dsl::*;
@@ -239,11 +248,6 @@ fn average_colours(colours: &[Colour]) -> Colour {
 command!(markov_cmd(ctx, msg, args) {
     use utils::{names_for_members, and_comma_split};
 
-    if !check_markov_state(&ctx, msg.guild_id.unwrap()) {
-        void!(say(msg.channel_id, "You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
-        return Ok(());
-    }
-
     // All this to just get a random user?
     let members: Vec<_> = args.multiple_quoted::<String>()
         .map(|u| u.into_iter() // resolve members
@@ -291,11 +295,6 @@ command!(markov_cmd(ctx, msg, args) {
 
 
 command!(markov_all(ctx, msg) {
-    if !check_markov_state(&ctx, msg.guild_id.unwrap()) {
-        void!(say(msg.channel_id, "You don't have markov chains enabled, use the 'markov_enable' command to enable them."));
-        return Ok(());
-    }
-
     let message_count = if ::SPECIAL_GUILDS.contains(&msg.guild_id.unwrap().0) { 100_000 } else { 20_000 };
 
     let messages = get_messages(&ctx, msg.guild_id.unwrap().0 as i64, None, message_count);
@@ -381,10 +380,12 @@ pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFr
                         .desc("Generate a markov chain for some users, if not users given: pick a random user")
                         .example("a_username @a_mention")
                         .usage("{users...}")
+                        .check(markov_state_check)
                )
                .command("markov_all", |c| c
                         .cmd(markov_all)
                         .desc("Generate a markov chain for all users in a guild")
+                        .check(markov_state_check)
                )
                .command("markov_enable", |c| c
                         .cmd(markov_enable)
@@ -401,6 +402,7 @@ pub fn setup_markov(client: &mut Client, frame: StandardFramework) -> StandardFr
                         .desc("Add messages to the markov chain.")
                         .required_permissions(Permissions::ADMINISTRATOR)
                         .bucket("markov_fill_bucket")
+                        .check(markov_state_check)
                )
                .command("strip_crap", |c| c
                         .cmd(strip_crap)

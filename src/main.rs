@@ -359,8 +359,8 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                         1 => format!("O-onii-chan... That hurts.. B-be gentle... Try again in {} seconds.", time),
                         _ => format!("You are ratelimited, try again in: {} seconds.", time),
                     },
-                CheckFailed =>
-                    "The check for this command failed.".to_string(),
+                CheckFailed(reason) =>
+                    format!("The check for this command failed with the reason: {}", reason),
                 LackOfPermissions(perms) =>
                     format!("This command requires permissions: {:?}", perms),
                 _ => return,

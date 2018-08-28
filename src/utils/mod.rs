@@ -163,8 +163,13 @@ pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
 }
 
 
-pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions) -> bool {
-    msg.channel_id.to_channel_cached().map_or(false, |c| c.is_nsfw())
+pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions) -> Result<(), String> {
+    if msg.channel_id.to_channel_cached().map_or(false, |c| c.is_nsfw()) {
+        Ok(())
+    } else {
+        Err("Channel is not NSFW".to_owned())
+    }
+
 }
 
 
