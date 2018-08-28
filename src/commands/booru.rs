@@ -442,7 +442,7 @@ command!(ninja_cmd(ctx, msg, args) {
 
     let tags = args.multiple::<String>().unwrap_or_else(|_| Vec::new());
 
-    let is_nsfw = msg.channel_id.find().map_or(false, |c| c.is_nsfw());
+    let is_nsfw = msg.channel_id.to_channel_cached().map_or(false, |c| c.is_nsfw());
     let nsfw_key = if is_nsfw { "a" } else { "s" }; // a = any, s = safe
 
     let ctx = BooruContext::new(&client, &tags, Some(vec![("f", nsfw_key.to_owned())]));

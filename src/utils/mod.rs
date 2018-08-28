@@ -29,10 +29,8 @@ pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
     where U: Into<UserId> + Copy,
           G: Into<GuildId> + Copy,
 {
-    fn backup_getter<U>(u_id: U) -> String
-        where U: Into<UserId> + Copy,
-    {
-        match u_id.into().get() {
+    fn backup_getter(u_id: impl Into<UserId> + Copy) -> String {
+        match u_id.into().to_user() {
             Ok(u) => u.name,
             _     => u_id.into().to_string(),
         }
@@ -151,7 +149,7 @@ impl Iterator for HistoryIterator {
 
 
 pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
-    if let Some(g) = g_id.find() {
+    if let Some(g) = g_id.to_guild_cached() {
         let guild = g.read();
 
         if let Ok(u) = s.parse::<UserId>() {
@@ -166,7 +164,7 @@ pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
 
 
 pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions) -> bool {
-    msg.channel_id.find().map_or(false, |c| c.is_nsfw())
+    msg.channel_id.to_channel_cached().map_or(false, |c| c.is_nsfw())
 }
 
 
@@ -215,13 +213,13 @@ pub fn say<D: Display>(chan_id: ChannelId, content: D) -> serenity::Result<()> {
 
 
 pub fn get_random_members(guild_id: GuildId) -> Option<Vec<Member>> {
-    guild_id.find().and_then(|g| {
+    guild_id.to_guild_cached().and_then(|g| {
         let guild = g.read();
         let member_ids: Vec<_> =
             guild.members
                  .keys()
                  .filter(|u| // no bots thanks
-                         match u.find() {
+                         match u.to_user_cached() {
                              Some(user) => !user.read().bot,
                              None       => false,
                          }
