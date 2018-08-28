@@ -45,9 +45,9 @@ use serenity::{
     model::{channel::Message,
             gateway::Ready,
             guild::Guild,
-            id::GuildId},
+            id::GuildId
+    },
     prelude::*,
-    utils::with_cache,
 };
 
 use diesel::{pg::PgConnection, prelude::*};
@@ -411,9 +411,7 @@ pub fn log_message(msg: &str) {
         .parse::<u64>()
         .unwrap();
 
-    if let Some(chan) = log_time!(with_cache(|c| c.guild_channel(chan_id)), "with_cache: get_log_channel") {
-        void!(chan.read().say(msg));
-    }
+    void!(say(chan_id, msg));
 }
 
 

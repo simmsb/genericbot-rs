@@ -168,7 +168,7 @@ pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptio
 }
 
 
-pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
+pub fn send_message<F, C: Into<ChannelId> + Copy>(chan_id: C, f: F) -> serenity::Result<()>
     where F: FnOnce(CreateMessage) -> CreateMessage {
     use ::{MESSENGER_SOCKET, connect_socket};
     use serde::Serialize;
@@ -186,7 +186,7 @@ pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
 
     let mut buf = Vec::new();
 
-    (chan_id, content).serialize(&mut Serializer::new(&mut buf)).unwrap();
+    (chan_id.into(), content).serialize(&mut Serializer::new(&mut buf)).unwrap();
 
     let mut socket = MESSENGER_SOCKET.lock();
 
@@ -200,15 +200,16 @@ pub fn send_message<F>(chan_id: ChannelId, f: F) -> serenity::Result<()>
     };
 
     if use_fallback {
-        serenity::http::send_message(chan_id.0, &object)?;
+        // we have to do this manually since we exhausted the builder function
+        serenity::http::send_message(chan_id.into().0, &object)?;
     }
 
     Ok(())
 }
 
 
-pub fn say<D: Display>(chan_id: ChannelId, content: D) -> serenity::Result<()> {
-    send_message(chan_id, |m| m.content(content))
+pub fn say<D: Display, C: Into<ChannelId> + Copy>(chan_id: C, content: D) -> serenity::Result<()> {
+    send_message(chan_id.into(), |m| m.content(content))
 }
 
 
