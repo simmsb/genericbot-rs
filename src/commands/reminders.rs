@@ -54,7 +54,7 @@ fn recognise_date(mut base_time: NaiveDateTime, date: &str) -> Result<(NaiveDate
             r"nov(?:ember)?|",
             r"dec(?:ember)?)",
             r"\s*(?P<value>\d+)",
-            r"(?:th)?",
+            r"(?:st|nd|rd|th)?",
             r"\b"
         )).unwrap();
 
