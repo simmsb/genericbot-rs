@@ -23,6 +23,7 @@ use rand;
 #[macro_use]
 pub mod macros;
 pub mod markov;
+pub mod pagination;
 
 
 pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
@@ -234,4 +235,26 @@ pub fn get_random_members(guild_id: GuildId) -> Option<Vec<Member>> {
         let &&member_id = rand::thread_rng().choose(&member_ids)?;
         guild.member(member_id).ok().map(|m| vec![m.clone()])
     })
+}
+
+// Stolen from serenity source
+fn normalize(text: &str) -> String {
+    // Remove invite links and popular scam websites, mostly to prevent the
+    // current user from triggering various ad detectors and prevent embeds.
+    text.replace("discord.gg", "discord\u{2024}gg")
+        .replace("discord.me", "discord\u{2024}me")
+        .replace("discordlist.net", "discordlist\u{2024}net")
+        .replace("discordservers.com", "discordservers\u{2024}com")
+        .replace("discordapp.com/invite", "discordapp\u{2024}com/invite")
+        // Remove right-to-left override and other similar annoying symbols
+        .replace('\u{202E}', " ") // RTL Override
+        .replace('\u{200F}', " ") // RTL Mark
+        .replace('\u{202B}', " ") // RTL Embedding
+        .replace('\u{200B}', " ") // Zero-width space
+        .replace('\u{200D}', " ") // Zero-width joiner
+        .replace('\u{200C}', " ") // Zero-width non-joiner
+        // Remove everyone and here mentions. Has to be put after ZWS replacement
+        // because it utilises it itself.
+        .replace("@everyone", "@\u{200B}everyone")
+        .replace("@here", "@\u{200B}here")
 }

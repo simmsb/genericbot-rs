@@ -5,4 +5,5 @@
 maybe not?
 ** DONE [#A] Use Failure crate for as many internal errors
 CLOSED: [2018-07-14 Sat 17:03]
-** TODO [#B] Generic indexable pagination stuff for listing reminders/ aliases/ tags...
+** DONE [#B] Generic indexable pagination stuff for listing reminders/ aliases/ tags...
+CLOSED: [2018-09-02 Sun 23:44]

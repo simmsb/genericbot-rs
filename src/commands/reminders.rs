@@ -13,8 +13,13 @@ use diesel;
 use ::PgConnectionManager;
 use regex::Regex;
 use chrono::{NaiveDateTime, Utc, Datelike, Duration, NaiveDate};
-use itertools::Itertools;
-use utils::say;
+use utils::{
+    say,
+    pagination::{
+        PaginationResult,
+        Paginate,
+    },
+};
 
 
 /// Parse a text message into a datetime and the remaining string.
@@ -209,7 +214,7 @@ fn insert_reminder(ctx: &Context, u_id: i64, c_id: i64, when: NaiveDateTime, now
 }
 
 
-fn list_reminders(ctx: &Context, u_id: i64) -> Vec<(NaiveDateTime, String)> {
+fn list_reminders(ctx: &Context, u_id: i64, page: i64) -> PaginationResult<(NaiveDateTime, String)> {
     use schema::reminder::dsl::*;
 
     let pool = extract_pool!(&ctx);
@@ -217,7 +222,8 @@ fn list_reminders(ctx: &Context, u_id: i64) -> Vec<(NaiveDateTime, String)> {
     reminder.filter(user_id.eq(u_id))
         .order(when)
         .select((when, text))
-        .load(pool)
+        .paginate(page)
+        .load_and_count_pages(pool)
         .unwrap()
 }
 
@@ -287,25 +293,26 @@ command!(remind_cmd(ctx, msg, args) {
 });
 
 
-command!(remind_list(ctx, msg) {
-    let reminders = list_reminders(&ctx, msg.author.id.0 as i64);
+command!(remind_list(ctx, msg, args) {
+    let page = args.single::<i64>().unwrap_or(1);
 
-    if reminders.is_empty() {
-        void!(say(msg.channel_id, "No reminders for this user"));
-        return Ok(());
+    if page <= 0 {
+        return Err("That page does not exist.".into());
     }
 
-    let lines = reminders
-        .into_iter()
-        .zip(1..)
-        .map(|((w, t), i)| format!("{:>3} | {} | {}", i, w, t))
-        .join("\n");
+    let reminders = list_reminders(&ctx, msg.author.id.0 as i64, page);
+
+    if !reminders.page_exists() {
+        return Err("That page does not exits or no reminders for this user.".into());
+    }
+
+    let block = reminders.block(|(ref w, ref t), i| format!("{:>3} | {} | {}", i, w, t));
 
     let message = MessageBuilder::new()
         .push("Reminders for ")
         .mention(&msg.author)
         .push_line(": ")
-        .push_codeblock_safe(lines, None);
+        .push(block);
 
     void!(say(msg.channel_id, message));
 });

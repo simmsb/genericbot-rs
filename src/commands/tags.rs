@@ -18,7 +18,13 @@ use diesel;
 use ::PgConnectionManager;
 use models::Tag;
 use itertools::Itertools;
-use utils::say;
+use utils::{
+    say,
+    pagination::{
+        PaginationResult,
+        Paginate,
+    },
+};
 
 
 fn get_tag(ctx: &Context, g_id: i64, tag_key: &str) -> QueryResult<Tag> {
@@ -63,29 +69,15 @@ fn delete_tag_do(ctx: &Context, tag_id: i64) {
 }
 
 
-fn get_tags_range(ctx: &Context, g_id: i64, page: i64) -> Vec<Tag> {
+fn list_tags(ctx: &Context, g_id: i64, page: i64) -> PaginationResult<Tag> {
     use schema::tag::dsl::*;
 
     let pool = extract_pool!(&ctx);
 
-    let start = page * 20;
     tag.filter(guild_id.eq(&g_id))
        .order(key.asc())
-       .offset(start)
-       .limit(20)
-       .load(pool)
-       .unwrap()
-}
-
-
-fn get_tag_count(ctx: &Context, g_id: i64) -> i64 {
-    use schema::tag::dsl::*;
-
-    let pool = extract_pool!(&ctx);
-
-    tag.filter(guild_id.eq(&g_id))
-       .count()
-       .get_result(pool)
+       .paginate(page)
+       .load_and_count_pages(pool)
        .unwrap()
 }
 
@@ -102,7 +94,7 @@ fn set_auto_tags(ctx: &Context, g_id: i64, value: bool) {
 }
 
 
-command!(add_tag(ctx, msg, args) {
+command!(add_tag_cmd(ctx, msg, args) {
     let key = get_arg!(args, single_quoted, String, key);
     let value = args.rest().trim();
 
@@ -117,7 +109,7 @@ command!(add_tag(ctx, msg, args) {
 });
 
 
-command!(tag(ctx, msg, args) {
+command!(tag_cmd(ctx, msg, args) {
     let key = get_arg!(args, multiple, String, key).join(" ");
 
     if let Ok(t) = get_tag(&ctx, msg.guild_id.unwrap().0 as i64, &key) {
@@ -152,40 +144,34 @@ command!(delete_tag(ctx, msg, args) {
 });
 
 
-command!(list_tags(ctx, msg, args) {
-    use std::cmp;
+command!(list_tags_cmd(ctx, msg, args) {
     use utils::names_for_members;
 
-    let page = args.single::<i64>().unwrap_or(1) - 1;
+    let page = args.single::<i64>().unwrap_or(1);
 
-    if page < 0 {
-        void!(say(msg.channel_id, "That page does not exist."));
-        return Ok(());
+    if page <= 0 {
+        return Err("That page does not exist.".into());
     }
 
-    let start = page * 20;
-    let last = (page + 1) * 20 - 1;
-    let tag_list: Vec<Tag> = get_tags_range(&ctx, msg.guild_id.unwrap().0 as i64, page as i64);
-    let tag_count = get_tag_count(&ctx, msg.guild_id.unwrap().0 as i64);
+    let tags = list_tags(&ctx, msg.guild_id.unwrap().0 as i64, page);
 
-    if start > tag_count {
-        void!(say(msg.channel_id, format!("The requested page ({}) is greater than the number of pages ({}).", page, last / 20)));
-        return Ok(());
+    if !tags.page_exists() {
+        return Err("That page does not exist or no tags exist for this server.".into());
     }
 
-    let user_ids: Vec<u64> = tag_list.iter().map(|t| t.author_id as u64).collect();
+    let user_ids: Vec<u64> = tags.results.iter().map(|t| t.author_id as u64).collect();
 
     let user_names = names_for_members(&user_ids, msg.guild_id.unwrap());
 
     let tag_content = user_names
         .into_iter()
-        .zip(tag_list)
-        .enumerate().map(|(i, (name, tag_v))| format!("{:>3} | {}: {}", i, name, tag_v.key))
+        .zip(tags.iter_with_indexes())
+        .map(|(name, (tag_v, i))| format!("{:>3} | {}: {}", i, name, tag_v.key))
         .join("\n");
 
     let content = MessageBuilder::new()
-        .push_line(format!("Tags {}-{} of {}", start, cmp::min(last, tag_count), tag_count))
-        .push_codeblock_safe(tag_content, None);
+        .push_codeblock_safe(tag_content, None)
+        .push_line(format!("Page {} of {}", tags.page, tags.total_pages));
 
     void!(say(msg.channel_id, content));
 });
@@ -209,14 +195,14 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                 .guild_only(true)
                 .command(
                     "add_tag", |c| c
-                        .cmd(add_tag)
+                        .cmd(add_tag_cmd)
                         .desc("Create a tag with a name and response.")
                         .example("\"something\" This tag's content.")
                         .usage("{tag name} {tag content}")
                 )
                 .command(
                     "tag", |c| c
-                        .cmd(tag)
+                        .cmd(tag_cmd)
                         .desc("Retrieve a tag.")
                         .example("\"something\"")
                         .usage("{tag name}")
@@ -230,7 +216,7 @@ pub fn setup_tags(_client: &mut Client, frame: StandardFramework) -> StandardFra
                 )
                 .command(
                     "list_tags", |c| c
-                        .cmd(list_tags)
+                        .cmd(list_tags_cmd)
                         .desc("List tags for this guild.")
                         .example("1 -- lists tags on the first page")
                         .usage("{page}")

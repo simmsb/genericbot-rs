@@ -10,8 +10,13 @@ use serenity::{
 use diesel;
 use diesel::prelude::*;
 use ::PgConnectionManager;
-use itertools::Itertools;
-use utils::say;
+use utils::{
+    say,
+    pagination::{
+        PaginationResult,
+        Paginate,
+    },
+};
 
 
 pub fn get_alias(ctx: &Context, name: &str, u_id: i64) -> Option<String> {
@@ -72,7 +77,7 @@ fn alias_exists(ctx: &Context, u_id: i64, name: &str) -> bool {
         .get_result(pool).expect("Failed to get alias existence")
 }
 
-fn list_aliases(ctx: &Context, u_id: i64) -> Vec<(String, String)> {
+fn list_aliases(ctx: &Context, u_id: i64, page: i64) -> PaginationResult<(String, String)> {
     use schema::command_alias::dsl::*;
 
     let pool = extract_pool!(&ctx);
@@ -81,30 +86,32 @@ fn list_aliases(ctx: &Context, u_id: i64) -> Vec<(String, String)> {
         .filter(owner_id.eq(u_id))
         .order(alias_name)
         .select((alias_name, alias_value))
-        .load(pool)
+        .paginate(page)
+        .load_and_count_pages(pool)
         .unwrap()
 }
 
 
-command!(list_aliases_cmd(ctx, msg) {
-    let aliases = list_aliases(&ctx, msg.author.id.0 as i64);
+command!(list_aliases_cmd(ctx, msg, args) {
+    let page = args.single::<i64>().unwrap_or(1);
 
-    if aliases.is_empty() {
-        void!(say(msg.channel_id, "No reminders for this user"));
-        return Ok(());
+    if page <= 0 {
+        return Err("That page does not exist.".into());
     }
 
-    let lines = aliases
-        .into_iter()
-        .zip(1..)
-        .map(|((w, t), i)| format!("{:3} | {:<10} | {}", i, w, t))
-        .join("\n");
+    let aliases = list_aliases(&ctx, msg.author.id.0 as i64, page);
+
+    if !aliases.page_exists() {
+        return Err("That page does not exist or no reminders for this user.".into());
+    }
+
+    let block = aliases.block(|(ref w, ref t), i| format!("{:3} | {:<10} | {}", i, w, t));
 
     let message = MessageBuilder::new()
         .push("Reminders for ")
         .mention(&msg.author)
         .push_line(": ")
-        .push_codeblock_safe(lines, None);
+        .push(block);
 
     void!(say(msg.channel_id, message));
 });
