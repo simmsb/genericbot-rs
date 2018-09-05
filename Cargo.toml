@@ -20,15 +20,15 @@ reqwest = "0.8.8"
 serde_json = "1.0.26"
 lru-cache = "0.1.1"
 threadpool = "1.7.1"
-log = "0.4.4"
+log = "0.4.5"
 rmp-serde = "0.13.7"
-serde = "1.0.75"
+serde = "1.0.76"
 failure = "0.1.2"
 fern = "0.5.6"
 
 [dependencies.serenity]
 git = "https://github.com/nitros12/serenity"
-rev = "b1d40f99f98a7831662fb1c4b8ec43a72336dd4f"
+rev = "e62cf66f8e7f1c97b772f925054bcdef6a5f5d39"
 
 [dependencies.diesel]
 version = "1.3.2"
