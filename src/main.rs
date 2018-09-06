@@ -394,11 +394,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                    .prefix("generic#")
                    .owners(owners))
         .customised_help(help_commands::plain, |c| c
-                         .individual_command_tip(
-                             "To get help on a specific command, pass the command name as an argument to help.")
-                         .command_not_found_text("A command with the name {} does not exist.")
-                         .suggestion_text("No command with the name '{}' was found.")
-                         .lacking_permissions(HelpBehaviour::Hide))
+                         .lacking_permissions(HelpBehaviour::Strike))
         .unrecognised_command(|ctx, msg, cmd_name| {
             process_tag(ctx, msg, cmd_name);
             process_alias(ctx, msg, cmd_name);
@@ -440,7 +436,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
         )
         .chain(
             fern::Dispatch::new()
-                .level(log::LevelFilter::Warn)
+                .level(log::LevelFilter::Error)
                 .level_for("bot", log::LevelFilter::Info)
                 .chain(fern::Output::call(|record| log_message(&format!("{}", record.args()))))
         )
