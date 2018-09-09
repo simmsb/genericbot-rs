@@ -1,7 +1,8 @@
-#+TITLE: genericbot TODO
+#+TITLE: genericbot todolist
 
 * genericbot Tasks
-** TODO [#C] Markov chains for non-members that have left
+** CANCELLED [#C] Markov chains for non-members that have left
+CLOSED: [2018-09-09 Sun 19:42]
 maybe not?
 ** DONE [#A] Use Failure crate for as many internal errors
 CLOSED: [2018-07-14 Sat 17:03]

@@ -6,6 +6,7 @@ use serenity::{
         CommandError,
     },
     utils::MessageBuilder,
+    model::id::GuildId,
     http,
 };
 use diesel;
@@ -73,8 +74,15 @@ command!(clean_guilds(ctx, msg, args) {
     if dry_run {
         void!(say(msg.channel_id, format!("Would leave: {} guilds.", guilds_to_leave.len())));
     } else {
-        drop_guilds(&ctx, &guilds_to_leave);
         void!(say(msg.channel_id, format!("Leaving: {} guilds.", guilds_to_leave.len())));
+
+        for &guild in &guilds_to_leave {
+            let guild_id = GuildId::from(guild as u64);
+            void!(guild_id.leave());
+        }
+
+        drop_guilds(&ctx, &guilds_to_leave);
+        void!(say(msg.channel_id, format!("Left: {} guilds", guilds_to_leave.len())));
     }
 
 });

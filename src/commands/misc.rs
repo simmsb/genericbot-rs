@@ -1,22 +1,19 @@
-use serenity::{
-    prelude::*,
-    framework::standard::{
-        StandardFramework,
-    },
-    utils::{
-        with_cache,
-        MessageBuilder,
-    },
-};
-use chrono::{Utc, NaiveDateTime};
+use chrono::{NaiveDateTime, Utc};
+use diesel;
+use diesel::prelude::*;
 use procinfo;
-use std::time;
 use rand;
 use rand::Rng;
-use utils::{try_resolve_user, say, send_message, and_comma_split};
-use whirlpool::{Whirlpool, Digest};
+use serenity::{
+    framework::standard::StandardFramework,
+    prelude::*,
+    utils::{with_cache, MessageBuilder},
+};
 use std::num::Wrapping;
-
+use std::time;
+use utils::{and_comma_split, say, send_message, try_resolve_user};
+use whirlpool::{Digest, Whirlpool};
+use PgConnectionManager;
 
 fn process_usage() -> f64 {
     use std::thread;
@@ -27,7 +24,6 @@ fn process_usage() -> f64 {
     let diff = end_measure - start_measure;
     diff as f64 / 0.1 // util seconds / 100ms per second
 }
-
 
 command!(status_cmd(ctx, msg) {
     use ::{StartTime, CmdCounter};
@@ -81,13 +77,11 @@ command!(status_cmd(ctx, msg) {
         ))?;
 });
 
-
 command!(q(_ctx, msg) {
     void!(say(msg.channel_id, rand::thread_rng()
                              .choose(&["Yes", "No"])
                              .unwrap()));
 });
-
 
 command!(message_owner(ctx, msg, args) {
     use ::OwnerId;
@@ -112,7 +106,6 @@ command!(message_owner(ctx, msg, args) {
     user.direct_message(|m| m.content(message))?;
 });
 
-
 macro_rules! x_someone {
     ( $name:ident, $send_msg:expr, $err:expr ) => (
         command!($name(_ctx, msg, args) {
@@ -135,11 +128,13 @@ macro_rules! x_someone {
     )
 }
 
-
 x_someone!(hug, "{} hugs {}!", "You can't hug nobody!");
 x_someone!(slap, "{} slaps {}! B..Baka!!!", "Go slap yourself you baka");
-x_someone!(kiss, "{} Kisses {}! Chuuuu!", "DW anon you'll find someone to love some day!");
-
+x_someone!(
+    kiss,
+    "{} Kisses {}! Chuuuu!",
+    "DW anon you'll find someone to love some day!"
+);
 
 command!(rate(_ctx, msg, args) {
     let asked = args.full().trim();
@@ -151,16 +146,14 @@ command!(rate(_ctx, msg, args) {
     void!(say(msg.channel_id, format!("I rate {}: {}/10", asked, modulus)));
 });
 
-
 fn id_to_ts(id: u64) -> NaiveDateTime {
     let offset_sec = (id >> 22) / 1000;
-    let ns         = (id >> 22) % 1000;
+    let ns = (id >> 22) % 1000;
 
     let secs = offset_sec + 1_420_070_400;
 
     NaiveDateTime::from_timestamp(secs as i64, ns as u32 * 1_000_000)
 }
-
 
 command!(ping_cmd(_ctx, msg) {
     let recvd = Utc::now().naive_utc();
@@ -182,7 +175,6 @@ command!(ping_cmd(_ctx, msg) {
     }
 });
 
-
 command!(stando(_ctx, msg) {
     let menacing = format!("***{}***", "ゴ".repeat(200));
     let out = MessageBuilder::new()
@@ -195,6 +187,50 @@ command!(stando(_ctx, msg) {
     void!(say(msg.channel_id, out));
 });
 
+fn increment_tea_count(ctx: &Context, u_id: i64) -> i32 {
+    use models::NewTeaCount;
+    use schema::tea_count::dsl::*;
+
+    let pool = extract_pool!(&ctx);
+
+    let to_insert = NewTeaCount {
+        user_id: u_id,
+        count: 1,
+    };
+
+    diesel::insert_into(tea_count)
+        .values(&to_insert)
+        .on_conflict(user_id)
+        .do_update()
+        .set(count.eq(count + 1))
+        .returning(count)
+        .get_result(pool)
+        .expect("Failed to update tea count.")
+}
+
+fn get_tea_count(ctx: &Context, u_id: i64) -> i32 {
+    use schema::tea_count::dsl::*;
+
+    let pool = extract_pool!(&ctx);
+
+    tea_count
+        .find(u_id)
+        .select(count)
+        .first(pool)
+        .unwrap_or(0)
+}
+
+command!(tea_plus_plus_command(ctx, msg) {
+    let count = increment_tea_count(&ctx, msg.author.id.0 as i64);
+
+    void!(say(msg.channel_id, format!("Your tea count is now: {}", count)));
+});
+
+command!(tea_count_command(ctx, msg) {
+    let count = get_tea_count(&ctx, msg.author.id.0 as i64);
+
+    void!(say(msg.channel_id, format!("Your tea count is: {}", count)));
+});
 
 pub fn setup_misc(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
     frame
@@ -242,6 +278,15 @@ pub fn setup_misc(_client: &mut Client, frame: StandardFramework) -> StandardFra
                .help_available(false)
                .command("stando", |c| c
                         .cmd(stando)
-                        .desc("An enemy stand!"))
+                        .desc("An enemy stand!")
+               )
+               .command("tea++", |c| c
+                        .cmd(tea_plus_plus_command)
+                        .desc("tea += 1")
+               )
+               .command("tea_count", |c| c
+                        .cmd(tea_count_command)
+                        .desc("get your tea count")
+               )
         )
 }

@@ -52,6 +52,13 @@ pub struct NewCommandAlias<'a> {
     pub alias_value: &'a str,
 }
 
+#[table_name="tea_count"]
+#[derive(Insertable)]
+pub struct NewTeaCount {
+    pub user_id: i64,
+    pub count: i32,
+}
+
 #[derive(Queryable)]
 pub struct Guild {
     pub id: i64,

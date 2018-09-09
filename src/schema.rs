@@ -55,6 +55,13 @@ table! {
     }
 }
 
+table! {
+    tea_count (user_id) {
+        user_id -> Int8,
+        count -> Int4,
+    }
+}
+
 joinable!(message -> guild (guild_id));
 joinable!(prefix -> guild (guild_id));
 joinable!(tag -> guild (guild_id));
@@ -66,4 +73,5 @@ allow_tables_to_appear_in_same_query!(
     prefix,
     reminder,
     tag,
+    tea_count,
 );

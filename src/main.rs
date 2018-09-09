@@ -287,14 +287,14 @@ fn process_tag(ctx: &mut Context, msg: &Message, cmd_name: &str) {
     let pool = extract_pool!(&ctx);
 
     let has_auto_tags = guild
-        .find(&g_id)
+        .find(g_id)
         .select(tag_prefix_on)
         .first(pool)
         .unwrap_or(false);
 
     if has_auto_tags {
         if let Ok(r_tag) = tag
-            .filter(guild_id.eq(&g_id))
+            .filter(guild_id.eq(g_id))
             .filter(key.eq(cmd_name))
             .select(text)
             .first::<String>(pool) {
