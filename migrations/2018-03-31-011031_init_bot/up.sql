@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS tag (
        UNIQUE (guild_id, "key")
 );
 
-CREATE INDEX IF NOT EXISTS "message"  ON ("guild_id", "user_id");
-CREATE INDEX IF NOT EXISTS "prefix"   ON ("guild_id");
-CREATE INDEX IF NOT EXISTS "reminder" ON ("when" ASC);
-CREATE INDEX IF NOT EXISTS "tag"      ON ("key", "guild_id");
+CREATE INDEX IF NOT EXISTS "message_guild_id_user_id_idx" ON "message" ("guild_id", "user_id");
+CREATE INDEX IF NOT EXISTS "prefix_guild_id_idx" ON "prefix" ("guild_id");
+CREATE INDEX IF NOT EXISTS "reminder_when_idx" ON "reminder" ("when" ASC);
+CREATE INDEX IF NOT EXISTS "tag_key_guild_id_idx" ON "tag" ("key", "guild_id");

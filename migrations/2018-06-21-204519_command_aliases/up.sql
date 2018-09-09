@@ -8,4 +8,4 @@ CREATE TABLE IF NOT EXISTS command_alias (
        UNIQUE (owner_id, alias_name)
 );
 
-CREATE INDEX IF NOT EXISTS "command_alias" ON ("owner_id");
+CREATE INDEX IF NOT EXISTS "command_alias_owner_id_idx" ON "command_alias" ("owner_id");
