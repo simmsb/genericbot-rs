@@ -3,6 +3,9 @@ name = "genericbot-rs"
 version = "0.1.0"
 authors = ["Ben Simms <ben@bensimms.moe>"]
 
+[profile.release]
+lto = true
+
 [dependencies]
 dotenv = "0.13.0"
 chrono = "0.4.6"

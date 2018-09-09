@@ -1,6 +1,6 @@
 -- Your SQL goes here
 
-CREATE TABLE command_alias (
+CREATE TABLE IF NOT EXISTS command_alias (
        id BIGSERIAL PRIMARY KEY,
        owner_id BIGINT NOT NULL,
        alias_name VARCHAR(2000) NOT NULL,
@@ -8,4 +8,4 @@ CREATE TABLE command_alias (
        UNIQUE (owner_id, alias_name)
 );
 
-CREATE INDEX ON "command_alias" ("owner_id");
+CREATE INDEX IF NOT EXISTS ON "command_alias" ("owner_id");
