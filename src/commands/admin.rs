@@ -5,7 +5,10 @@ use serenity::{
         StandardFramework,
         CommandError,
     },
-    utils::MessageBuilder,
+    utils::{
+        MessageBuilder,
+        with_cache,
+    },
     model::id::GuildId,
     http,
 };
@@ -51,12 +54,25 @@ fn empty_guilds(ctx: &Context) -> QueryResult<Vec<i64>> {
 }
 
 
-fn drop_guilds(ctx: &Context, guilds: &[i64]) {
+fn drop_guilds(ctx: &Context, guilds: &[i64]) -> usize {
     use schema::guild::dsl::*;
 
     let pool = extract_pool!(&ctx);
 
-    diesel::delete(guild.filter(id.eq_any(guilds))).execute(pool).unwrap();
+    diesel::delete(guild.filter(id.eq_any(guilds)))
+        .execute(pool)
+        .unwrap()
+}
+
+
+fn clean_dead_guilds(ctx: &Context, guilds: &[i64]) -> usize {
+    use schema::guild::dsl::*;
+
+    let pool = extract_pool!(&ctx);
+
+    diesel::delete(guild.filter(diesel::dsl::not(id.eq_any(guilds))))
+        .execute(pool)
+        .unwrap()
 }
 
 
@@ -84,9 +100,19 @@ command!(clean_guilds(ctx, msg, args) {
         drop_guilds(&ctx, &guilds_to_leave);
         void!(say(msg.channel_id, format!("Left: {} guilds", guilds_to_leave.len())));
     }
-
 });
 
+command!(clean_dead_guilds_cmd(ctx, msg) {
+    let guild_ids: Vec<_> = with_cache(
+        |c| c.all_guilds()
+             .into_iter()
+             .map(|g| g.0 as i64)
+             .collect());
+
+    let deleted = clean_dead_guilds(&ctx, &guild_ids);
+
+    void!(say(msg.channel_id, format!("Dropped {} dead guilds", deleted)));
+});
 
 command!(stop_bot(ctx, msg) {
     use ::ShardManagerContainer;
@@ -167,6 +193,11 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
                     "admin_stats", |c| c
                         .cmd(admin_stats)
                         .desc("Administrator stats")
+                )
+                .command(
+                    "clean_dead_guilds", |c| c
+                        .cmd(clean_dead_guilds_cmd)
+                        .desc("Delete guilds that the bot is no longer in from the db.")
                 )
     )
 }

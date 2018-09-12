@@ -220,16 +220,26 @@ fn get_tea_count(ctx: &Context, u_id: i64) -> i32 {
         .unwrap_or(0)
 }
 
-command!(tea_plus_plus_command(ctx, msg) {
+command!(tea_plus_plus_cmd(ctx, msg) {
     let count = increment_tea_count(&ctx, msg.author.id.0 as i64);
 
     void!(say(msg.channel_id, format!("Your tea count is now: {}", count)));
 });
 
-command!(tea_count_command(ctx, msg) {
+command!(tea_count_cmd(ctx, msg) {
     let count = get_tea_count(&ctx, msg.author.id.0 as i64);
 
     void!(say(msg.channel_id, format!("Your tea count is: {}", count)));
+});
+
+command!(count_generics_cmd(_ctx, msg) {
+    let count = with_cache(
+        |c| c.guilds
+             .values()
+             .filter(|g| g.read().name.contains("generic"))
+             .count());
+
+    void!(say(msg.channel_id, format!("There are {} guilds that have generic in their name", count)));
 });
 
 pub fn setup_misc(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
@@ -281,12 +291,16 @@ pub fn setup_misc(_client: &mut Client, frame: StandardFramework) -> StandardFra
                         .desc("An enemy stand!")
                )
                .command("tea++", |c| c
-                        .cmd(tea_plus_plus_command)
+                        .cmd(tea_plus_plus_cmd)
                         .desc("tea += 1")
                )
                .command("tea_count", |c| c
-                        .cmd(tea_count_command)
+                        .cmd(tea_count_cmd)
                         .desc("get your tea count")
+               )
+               .command("generic_count", |c| c
+                        .cmd(count_generics_cmd)
+                        .desc("what is this bot useful for anyway?")
                )
         )
 }

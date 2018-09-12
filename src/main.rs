@@ -292,6 +292,7 @@ fn process_tag(ctx: &mut Context, msg: &Message, cmd_name: &str) {
         .first(pool)
         .unwrap_or(false);
 
+
     if has_auto_tags {
         if let Ok(r_tag) = tag
             .filter(guild_id.eq(g_id))
