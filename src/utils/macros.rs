@@ -28,7 +28,9 @@ macro_rules! extract_pool {
 /// Macro for discarding the result of a `#[must_use]` function
 macro_rules! void {
     ( $d:expr ) => (
-        { let _ = $d; }
+        { if let Err(e) = $d {
+            error!(target: "bot", "Got error {} from {}.", e, stringify!($d));
+        } }
     )
 }
 

@@ -173,7 +173,7 @@ pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptio
 
 }
 
-
+#[must_use]
 pub fn send_message<F, C: Into<ChannelId> + Copy>(chan_id: C, f: F) -> serenity::Result<()>
     where F: FnOnce(CreateMessage) -> CreateMessage {
     use ::{MESSENGER_SOCKET, connect_socket};
@@ -194,27 +194,29 @@ pub fn send_message<F, C: Into<ChannelId> + Copy>(chan_id: C, f: F) -> serenity:
 
     (chan_id.into(), content).serialize(&mut Serializer::new(&mut buf)).unwrap();
 
-    let mut socket = MESSENGER_SOCKET.lock();
+    let use_fallback = {
+        let mut socket = MESSENGER_SOCKET.lock();
 
-    if socket.is_none() {
-        *socket = connect_socket();
-    } // try to connect once
+        if socket.is_none() {
+            *socket = connect_socket();
+        } // try to connect once
 
-    let use_fallback = match socket.as_mut() {
-        Some(skt) => skt.write_all(buf.as_slice()).is_err(),
-        _         => true,
+        match socket.as_mut() {
+            Some(skt) => skt.write_all(buf.as_slice()).is_err(),
+            _         => true,
+        }
     };
 
     if use_fallback {
-        // we have to do this manually since we exhausted the builder function
-        warn!(target: "bot", "Using builtin message sender.");
+        // manual print since logging results in a message being sent
+        eprintln!("[WARN][bot] Using builtin message sender.");
         serenity::http::send_message(chan_id.into().0, &object)?;
     }
 
     Ok(())
 }
 
-
+#[must_use]
 pub fn say<D: Display, C: Into<ChannelId> + Copy>(chan_id: C, content: D) -> serenity::Result<()> {
     send_message(chan_id.into(), |m| m.content(content))
 }
