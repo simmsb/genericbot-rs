@@ -59,6 +59,13 @@ pub struct NewTeaCount {
     pub count: i32,
 }
 
+#[table_name="blocked_guilds_channels"]
+#[derive(Insertable)]
+pub struct NewBlock {
+    pub guild_id: Option<i64>,
+    pub channel_id: Option<i64>,
+}
+
 #[derive(Queryable)]
 pub struct Guild {
     pub id: i64,

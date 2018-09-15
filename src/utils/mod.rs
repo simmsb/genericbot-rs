@@ -207,6 +207,7 @@ pub fn send_message<F, C: Into<ChannelId> + Copy>(chan_id: C, f: F) -> serenity:
 
     if use_fallback {
         // we have to do this manually since we exhausted the builder function
+        warn!(target: "bot", "Using builtin message sender.");
         serenity::http::send_message(chan_id.into().0, &object)?;
     }
 

@@ -9,7 +9,9 @@ use serenity::{
         MessageBuilder,
         with_cache,
     },
-    model::id::GuildId,
+    model::{
+        channel::Channel,
+        id::{GuildId, ChannelId}},
     http,
 };
 use diesel;
@@ -162,6 +164,63 @@ command!(admin_stats(ctx, msg) {
     void!(say(msg.channel_id, resp));
 });
 
+command!(leave_guild_cmd(_ctx, _msg, args) {
+    let guild_id = GuildId::from(get_arg!(args, single_quoted, u64, guild_id));
+
+    if let Some(guild) = guild_id.to_guild_cached() {
+        let guild = guild.read();
+        info!(target: "bot", "Leaving guild: {}", guild.name);
+        return Ok(());
+    }
+
+    void!(guild_id.leave());
+
+    warn!(target: "bot", "Couldn't leave guild: {}", guild_id);
+});
+
+command!(leave_guild_from_channel_cmd(_ctx, _msg, args) {
+    let channel_id = ChannelId::from(get_arg!(args, single_quoted, u64, guild_id));
+
+    if let Some(Channel::Guild(channel)) = channel_id.to_channel_cached() {
+        let channel = channel.read();
+        if let Some(guild) = channel.guild_id.to_guild_cached() {
+            let guild = guild.read();
+            info!(target: "bot", "Leaving guild: {}", guild.name);
+        }
+        void!(channel.guild_id.leave());
+        return Ok(());
+    }
+    warn!(target: "bot", "Couldn't leave guild by chan: {}", channel_id);
+});
+
+fn insert_block(ctx: &Context, g_id: Option<i64>, c_id: Option<i64>) {
+    use models::NewBlock;
+    use schema::blocked_guilds_channels;
+
+    let pool = extract_pool!(&ctx);
+
+    let block = NewBlock {
+        guild_id: g_id,
+        channel_id: c_id,
+    };
+
+    diesel::insert_into(blocked_guilds_channels::table)
+        .values(&block)
+        .execute(pool)
+        .expect("Failed to insert block");
+}
+
+command!(block_guild_cmd(ctx, _msg, args) {
+    let guild_id = get_arg!(args, single_quoted, u64, guild_id) as i64;
+
+    insert_block(&ctx, Some(guild_id), None);
+});
+
+command!(block_chan_cmd(ctx, _msg, args) {
+    let chan_id = get_arg!(args, single_quoted, u64, guild_id) as i64;
+
+    insert_block(&ctx, None, Some(chan_id));
+});
 
 pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
     frame.group("Admin",
@@ -198,6 +257,26 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
                     "clean_dead_guilds", |c| c
                         .cmd(clean_dead_guilds_cmd)
                         .desc("Delete guilds that the bot is no longer in from the db.")
+                )
+                .command(
+                    "leave_guild", |c| c
+                        .cmd(leave_guild_cmd)
+                        .desc("Leave a guild by id.")
+                )
+                .command(
+                    "leave_guild_chan", |c| c
+                        .cmd(leave_guild_from_channel_cmd)
+                        .desc("Leave a guild by a channel id.")
+                )
+                .command(
+                    "block_guild", |c| c
+                        .cmd(block_guild_cmd)
+                        .desc("Block a guild by id.")
+                )
+                .command(
+                    "block_chan", |c| c
+                        .cmd(block_chan_cmd)
+                        .desc("Block a guild by a channel id.")
                 )
     )
 }

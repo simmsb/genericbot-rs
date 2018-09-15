@@ -133,6 +133,27 @@ impl EventHandler for Handler {
         info!(target: "bot", "Joined guild: {}", guild.name);
 
         ensure_guild(&ctx, guild.id);
+
+        let channel_ids: Vec<_> = guild.channels.values()
+                                                .map(|c| c.read().id.0 as i64)
+                                                .collect();
+
+        {
+            use schema::blocked_guilds_channels::dsl::*;
+
+            let is_blocked: bool = diesel::select(exists(
+                blocked_guilds_channels.filter(
+                    guild_id.eq(guild.id.0 as i64)
+                        .or(channel_id.eq_any(&channel_ids)))))
+                .get_result(pool)
+                .expect("can't test if blocked");
+
+            if is_blocked {
+                info!(target: "bot", "Leaving blocked guild: {}", guild.name);
+                void!(guild.leave());
+            }
+        }
+
     }
 
     fn resume(&self, _ctx: Context, evt: serenity::model::event::ResumedEvent) {
@@ -400,6 +421,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
             process_tag(ctx, msg, cmd_name);
             process_alias(ctx, msg, cmd_name);
         })
+        .bucket("global_bucket", 1, 10, 10)
 }
 
 pub fn log_message(msg: &str) {

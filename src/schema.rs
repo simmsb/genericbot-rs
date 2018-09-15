@@ -1,4 +1,12 @@
 table! {
+    blocked_guilds_channels (id) {
+        id -> Int4,
+        guild_id -> Nullable<Int8>,
+        channel_id -> Nullable<Int8>,
+    }
+}
+
+table! {
     command_alias (id) {
         id -> Int8,
         owner_id -> Int8,
@@ -67,6 +75,7 @@ joinable!(prefix -> guild (guild_id));
 joinable!(tag -> guild (guild_id));
 
 allow_tables_to_appear_in_same_query!(
+    blocked_guilds_channels,
     command_alias,
     guild,
     message,

@@ -3,9 +3,6 @@ name = "genericbot-rs"
 version = "0.1.0"
 authors = ["Ben Simms <ben@bensimms.moe>"]
 
-[profile.release]
-lto = true
-
 [dependencies]
 dotenv = "0.13.0"
 chrono = "0.4.6"
@@ -30,8 +27,9 @@ failure = "0.1.2"
 fern = "0.5.6"
 
 [dependencies.serenity]
+# path = "../serenity"
 git = "https://github.com/nitros12/serenity"
-rev = "263d5d1d42190c6fcf332fcbf0cb7d00d7a82827"
+rev = "bd7c7af9a39cedecf83ddff578b73e5ff61a7ed1"
 
 [dependencies.diesel]
 version = "1.3.2"
