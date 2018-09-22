@@ -27,8 +27,8 @@ impl Key for ImageClient {
 
 impl ImageClient {
     fn generate() -> reqwest::Client {
-        let mut headers = header::Headers::new();
-        headers.set(header::UserAgent::new("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"));
+        let mut headers = header::HeaderMap::new();
+        headers.insert(header::USER_AGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36".parse().unwrap());
         reqwest::Client::builder()
             .default_headers(headers)
             .build()

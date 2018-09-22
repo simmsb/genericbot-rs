@@ -32,8 +32,8 @@ pub fn background_task(ctx: &Context) {
 
             let bot_id = log_time!(utils::with_cache(|c| c.user.id), "with_cache_lock: get bot id");
 
-            let mut headers = reqwest::header::Headers::new();
-            headers.set(reqwest::header::Authorization(botlist_key.to_owned()));
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(reqwest::header::AUTHORIZATION, botlist_key.parse().unwrap());
 
             let client = reqwest::Client::builder()
                 .default_headers(headers)

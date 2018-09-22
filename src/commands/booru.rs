@@ -36,8 +36,8 @@ impl Key for BooruClient {
 
 impl BooruClient {
     fn generate() -> reqwest::Client {
-        let mut headers = header::Headers::new();
-        headers.set(header::UserAgent::new("genericBot Discord Bot: https://github.com/nitros12/genericbot-rs"));
+        let mut headers = header::HeaderMap::new();
+        headers.insert(header::USER_AGENT, "genericBot Discord Bot: https://github.com/nitros12/genericbot-rs".parse().unwrap());
         reqwest::Client::builder()
             .default_headers(headers)
             .build()
