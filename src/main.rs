@@ -118,15 +118,18 @@ impl EventHandler for Handler {
         use diesel::dsl::exists;
         use schema;
 
-        let pool = extract_pool!(&ctx);
+        let guild_known: bool = {
+            let pool = extract_pool!(&ctx);
 
-        let guild_known: bool = diesel::select(exists(
-            schema::guild::table
-                .find(guild.id.0 as i64)))
-            .get_result(pool)
-            .expect("Failed to check guild existence");
+            diesel::select(exists(
+                schema::guild::table
+                    .find(guild.id.0 as i64)))
+                .get_result(pool)
+                .expect("Failed to check guild existence")
+        };
 
         if guild_known {
+            trace!(target: "bot", "Joined already known guild: {}", guild.id);
             return;
         }
 
@@ -139,6 +142,8 @@ impl EventHandler for Handler {
                                                 .collect();
 
         {
+            let pool = extract_pool!(&ctx);
+
             use schema::blocked_guilds_channels::dsl::*;
 
             let is_blocked: bool = diesel::select(exists(
@@ -173,7 +178,7 @@ fn ensure_guild(ctx: &Context, g_id: GuildId) {
     use models::{NewGuild, NewPrefix};
     use schema;
 
-    let pool = extract_pool!(&ctx);
+    let pool = &*ctx.data.lock().get::<PgConnectionManager>().unwrap().get().unwrap();
 
     let new_guild = NewGuild { id: g_id.0 as i64 };
 
@@ -181,6 +186,12 @@ fn ensure_guild(ctx: &Context, g_id: GuildId) {
         guild_id: g_id.0 as i64,
         pre: "#!",
     };
+
+    {
+        let mut data = ctx.data.lock();
+        let cache = data.get_mut::<PrefixCache>().unwrap();
+        cache.remove(&g_id);
+    }
 
     diesel::insert_into(schema::guild::table)
         .values(&new_guild)
@@ -454,7 +465,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
             fern::Dispatch::new()
                 .level(log::LevelFilter::Info)
                 .level_for("serenity", log::LevelFilter::Debug)
-                .level_for("bot", log::LevelFilter::Debug)
+                .level_for("bot", log::LevelFilter::Trace)
                 .chain(std::io::stdout())
         )
         .chain(
