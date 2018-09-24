@@ -96,9 +96,9 @@ fn find_bot_collection_guilds() -> Vec<GuildId> {
                                   (b, p + 1)
                               });
 
-                     // only leave a guild if they have more than 2x bots than people
+                     // only leave a guild if they have more bots than people
                      // and also atleast 10 people, so we don't end up leaving small guilds
-                     if (bot_count >= (people_count / 2)) && people_count >= 10 {
+                     if bot_count >= people_count && people_count >= 10 {
                          Some(guild.id)
                      } else {
                          None
