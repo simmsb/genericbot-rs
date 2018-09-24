@@ -15,7 +15,10 @@ use serenity::{
     http,
 };
 use diesel;
-use std::iter;
+use std::{
+    iter,
+    collections::HashSet,
+};
 use diesel::prelude::*;
 use ::PgConnectionManager;
 use utils::say;
@@ -77,30 +80,63 @@ fn clean_dead_guilds(ctx: &Context, guilds: &[i64]) -> usize {
         .unwrap()
 }
 
+fn find_bot_collection_guilds() -> Vec<GuildId> {
+    with_cache(
+        |c| c.guilds
+             .values()
+             .filter_map(
+                 |g| {
+                     let guild = g.read();
+                     let (bot_count, people_count) =
+                         guild.members
+                              .values()
+                              .fold((0, 0), |(b, p), m| if m.user.read().bot {
+                                  (b + 1, p)
+                              } else {
+                                  (b, p + 1)
+                              });
+
+                     // only leave a guild if they have more than 2x bots than people
+                     // and also atleast 10 people, so we don't end up leaving small guilds
+                     if (bot_count >= (people_count / 2)) && people_count >= 10 {
+                         Some(guild.id)
+                     } else {
+                         None
+                     }
+                 })
+             .collect()
+    )
+}
 
 command!(clean_guilds(ctx, msg, args) {
     let dry_run = get_arg!(args, single, bool, dry_run, true);
 
     let ignored_guilds: [i64; 1] = [110373943822540800];
 
-    let mut guilds_to_leave = empty_guilds(&ctx)?;
+    let mut guilds_to_leave: HashSet<_> = empty_guilds(&ctx)?.into_iter().collect();
+
+    guilds_to_leave.extend(find_bot_collection_guilds()
+                           .into_iter()
+                           .map(|g_id| g_id.0 as i64));
 
     for guild in &ignored_guilds {
-        guilds_to_leave.remove_item(&guild);
+        guilds_to_leave.remove(&guild);
     }
 
-    if dry_run {
-        void!(say(msg.channel_id, format!("Would leave: {} guilds.", guilds_to_leave.len())));
-    } else {
-        void!(say(msg.channel_id, format!("Leaving: {} guilds.", guilds_to_leave.len())));
+    let guilds_to_leave_vec: Vec<_> = guilds_to_leave.into_iter().collect();
 
-        for &guild in &guilds_to_leave {
+    if dry_run {
+        void!(say(msg.channel_id, format!("Would leave: {} guilds.", guilds_to_leave_vec.len())));
+    } else {
+        void!(say(msg.channel_id, format!("Leaving: {} guilds.", guilds_to_leave_vec.len())));
+
+        for &guild in &guilds_to_leave_vec {
             let guild_id = GuildId::from(guild as u64);
             void!(guild_id.leave());
         }
 
-        drop_guilds(&ctx, &guilds_to_leave);
-        void!(say(msg.channel_id, format!("Left: {} guilds", guilds_to_leave.len())));
+        drop_guilds(&ctx, &guilds_to_leave_vec);
+        void!(say(msg.channel_id, format!("Left: {} guilds", guilds_to_leave_vec.len())));
     }
 });
 

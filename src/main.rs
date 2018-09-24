@@ -1,5 +1,3 @@
-#![feature(vec_remove_item)]
-
 pub mod models;
 pub mod schema;
 #[macro_use]

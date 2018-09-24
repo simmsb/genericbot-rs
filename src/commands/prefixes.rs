@@ -24,7 +24,10 @@ fn delete_prefix(ctx: &Context, p: &str, g_id: GuildId) {
     {
         let cache = data.get_mut::<PrefixCache>().unwrap();
         if let Some(mut pre_vec) = cache.get_mut(&g_id).map(|l| l.write()) {
-            pre_vec.remove_item(&p.to_owned());
+            let pos = pre_vec.iter().position(|x| x == &p);
+            if let Some(pos) = pos {
+                pre_vec.remove(pos);
+            }
         }
     }
 
