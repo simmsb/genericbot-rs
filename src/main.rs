@@ -383,7 +383,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
             debug!(target: "bot", "handling error: {:?}", err);
             let s = match err {
                 OnlyForGuilds =>
-                    "This command can only be used in private messages.".to_string(),
+                    "This command can only be used in guilds.".to_string(),
                 RateLimited(time) =>
                     match rand::thread_rng().gen_range(0, 10) {
                         0 => format!("Oopsie woopsie!! Uwu you made a fucky wucky!!! You're using the bot Tooo FAWST!?!?! Try again in {} seconds.", time),
