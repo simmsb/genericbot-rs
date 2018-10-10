@@ -29,7 +29,7 @@ fern = "0.5.6"
 [dependencies.serenity]
 # path = "../serenity"
 git = "https://github.com/nitros12/serenity"
-rev = "a8231cb9fb5873f3c2c73e9a579c40d84f8ada1f"
+rev = "d350bf15d7cc57434a885255a508d0a3700577d9"
 
 [dependencies.diesel]
 version = "1.3.3"
@@ -37,3 +37,6 @@ features = ["postgres", "chrono"]
 
 [dependencies.r2d2-diesel]
 git = "https://github.com/nitros12/r2d2-diesel"
+
+[patch.crates-io]
+openssl = { git = "https://github.com/ishitatsuyuki/rust-openssl", branch = "0.9.x" }
