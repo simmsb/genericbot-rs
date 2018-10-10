@@ -138,7 +138,7 @@ x_someone!(
 
 command!(rate(_ctx, msg, args) {
     let asked = args.full().trim();
-    let result = Whirlpool::digest_str(&asked);
+    let result = Whirlpool::digest(&asked.as_bytes());
     let sum: Wrapping<u8> = result.into_iter().map(Wrapping).sum();
 
     let modulus = sum % Wrapping(12);
