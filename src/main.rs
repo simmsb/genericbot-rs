@@ -25,7 +25,6 @@ extern crate itertools;
 extern crate lru_cache;
 extern crate procinfo;
 extern crate r2d2;
-extern crate r2d2_diesel;
 extern crate rand;
 extern crate regex;
 extern crate reqwest;
@@ -48,8 +47,7 @@ use serenity::{
     prelude::*,
 };
 
-use diesel::{pg::PgConnection, prelude::*};
-use r2d2_diesel::ConnectionManager;
+use diesel::{pg::PgConnection, prelude::*, r2d2::ConnectionManager};
 
 use lru_cache::LruCache;
 use std::{
