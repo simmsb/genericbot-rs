@@ -414,7 +414,7 @@ fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
                              .unwrap();
                      }
                  }
-                 Err(e) => void!(say(msg.channel_id, format!("{}: {}", cmd_name, e.0))),
+                 Err(e) => void!(say(msg.channel_id, format!("Error in command `{}`: {}", cmd_name, e.0))),
              }
          })
         .configure(|c| c
