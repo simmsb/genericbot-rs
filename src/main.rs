@@ -461,7 +461,7 @@ fn setup_logger() -> Result<(), fern::InitError> {
             fern::Dispatch::new()
                 .level(log::LevelFilter::Info)
                 .level_for("serenity", log::LevelFilter::Debug)
-                .level_for("bot", log::LevelFilter::Trace)
+                .level_for("bot", log::LevelFilter::Debug)
                 .chain(std::io::stdout())
         )
         .chain(
