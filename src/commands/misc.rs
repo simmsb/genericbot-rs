@@ -87,6 +87,10 @@ command!(message_owner(ctx, msg, args) {
     use ::OwnerId;
     let text = args.full();
 
+    if text.is_empty() {
+        return Err("Empty message".into());
+    }
+
     let message = MessageBuilder::new()
         .push("Private message: ")
         .push_mono_line_safe(text)
