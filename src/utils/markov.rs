@@ -75,6 +75,11 @@ impl<'a> MChain<'a> {
             if let Some(r) = self.map.get(&state) {
                 let sum: usize = r.iter().map(|(_, &v)| v as usize).sum();
 
+                // welp
+                if sum == 0 {
+                    break;
+                }
+
                 let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: v as u32, item: k}).collect();
 
                 if sum > u32::MAX as usize {
