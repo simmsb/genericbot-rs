@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, seq::SliceRandom};
 use regex::Regex;
 use reqwest;
 use reqwest::header;
@@ -77,8 +77,8 @@ impl ImageResponse {
             .captures_iter(resp)
             .collect();
 
-        thread_rng()
-            .choose(&images)
+        images
+            .choose(&mut thread_rng())
             .map(|s| s.get(1).unwrap().as_str().to_owned())
             .ok_or_else(|| ImageError::NoImages(ctx.search_term.to_owned()).into())
     }

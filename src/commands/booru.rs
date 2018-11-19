@@ -10,7 +10,7 @@ use serde_json;
 use reqwest::header;
 use reqwest;
 use itertools::Itertools;
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, seq::SliceRandom};
 use typemap::Key;
 use std::marker;
 use failure::Error;
@@ -145,7 +145,7 @@ trait BooruRequestor {
             .enumerate()
             .collect();
 
-        thread_rng().shuffle(&mut urls);
+        urls.shuffle(&mut thread_rng());
 
         // for each url, check that a HTTP HEAD on the url gives a result
         for (index, url) in urls {

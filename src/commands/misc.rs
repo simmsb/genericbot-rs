@@ -2,8 +2,7 @@ use chrono::{NaiveDateTime, Utc};
 use diesel;
 use diesel::prelude::*;
 use procinfo;
-use rand;
-use rand::Rng;
+use rand::{thread_rng, seq::SliceRandom};
 use serenity::{
     framework::standard::StandardFramework,
     prelude::*,
@@ -78,9 +77,9 @@ command!(status_cmd(ctx, msg) {
 });
 
 command!(q(_ctx, msg) {
-    void!(say(msg.channel_id, rand::thread_rng()
-                             .choose(&["Yes", "No"])
-                             .unwrap()));
+    let options = &["Yes", "No"];
+
+    void!(say(msg.channel_id, options.choose(&mut thread_rng()).unwrap()));
 });
 
 command!(message_owner(ctx, msg, args) {

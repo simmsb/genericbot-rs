@@ -29,7 +29,7 @@ enum MarkovEntry<'a> {
 // Only lives in the lifetime of it's input
 #[derive(Default)]
 pub struct MChain<'a> {
-    map: HashMap<(MarkovEntry<'a>, MarkovEntry<'a>), HashMap<MarkovEntry<'a>, f32>>,
+    map: HashMap<(MarkovEntry<'a>, MarkovEntry<'a>), HashMap<MarkovEntry<'a>, f64>>,
 }
 
 
@@ -63,8 +63,7 @@ impl<'a> MChain<'a> {
     }
 
     pub fn generate_string(&self, limit: usize, minimum: usize) -> Option<String> {
-        use std::u32;
-        use rand::distributions::{Weighted, WeightedChoice, Distribution};
+        use rand::distributions::{WeightedIndex, Distribution};
 
         let mut res = String::new();
         let mut state = (MarkovEntry::Start, MarkovEntry::Start);
@@ -73,26 +72,18 @@ impl<'a> MChain<'a> {
 
         for _ in 0..limit {
             if let Some(r) = self.map.get(&state) {
-                let sum: usize = r.iter().map(|(_, &v)| v as usize).sum();
+                let choices = r.iter().map(|(k, _)| k).collect::<Vec<_>>();
+                let weights = r.iter().map(|(_, &v)| v).collect::<Vec<_>>();
+                let sum: f64 = weights.iter().sum();
 
                 // welp
-                if sum == 0 {
+                if sum == 0.0 {
                     break;
                 }
 
-                let mut dist: Vec<_> = r.iter().map(|(k, &v)| Weighted { weight: v as u32, item: k}).collect();
+                let wc = WeightedIndex::new(&weights).unwrap();
+                let next = choices[wc.sample(&mut rng)];
 
-                if sum > u32::MAX as usize {
-                    // If the sum of each value is greater than a u32 size, we need to shrink our weights
-                    let ratio = (sum / u32::MAX as usize) as u32;
-                    for mut v in &mut dist {
-                        v.weight /= ratio;
-                    }
-                }
-
-                let wc = WeightedChoice::new(&mut dist);
-
-                let next = wc.sample(&mut rng);
                 match next {
                     MarkovEntry::Word(w) => { res.push_str(" "); res.push_str(w); },
                     MarkovEntry::End     => break,

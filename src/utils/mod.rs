@@ -16,9 +16,7 @@ use serenity;
 use std::fmt::Display;
 use serde_json;
 use itertools::Itertools;
-use rand::Rng;
-use rand;
-
+use rand::{thread_rng, seq::SliceRandom};
 
 #[macro_use]
 pub mod macros;
@@ -235,7 +233,7 @@ pub fn get_random_members(guild_id: GuildId) -> Option<Vec<Member>> {
                          }
                  )
                  .collect();
-        let &&member_id = rand::thread_rng().choose(&member_ids)?;
+        let &&member_id = member_ids.choose(&mut thread_rng())?;
         guild.member(member_id).ok().map(|m| vec![m.clone()])
     })
 }
