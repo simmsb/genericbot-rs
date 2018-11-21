@@ -22,6 +22,7 @@ use std::{
 use diesel::prelude::*;
 use ::PgConnectionManager;
 use utils::say;
+use itertools::Itertools;
 
 
 command!(set_avatar(_ctx, msg) {
@@ -253,9 +254,28 @@ command!(block_guild_cmd(ctx, _msg, args) {
 });
 
 command!(block_chan_cmd(ctx, _msg, args) {
-    let chan_id = get_arg!(args, single_quoted, u64, guild_id) as i64;
+    let chan_id = get_arg!(args, single_quoted, u64, chan_id) as i64;
 
     insert_block(&ctx, None, Some(chan_id));
+});
+
+command!(guild_info_cmd(_ctx, msg, args) {
+    let guild_id = get_arg!(args, single_quoted, u64, guild_id);
+    let guild_lock = GuildId::from(guild_id).to_guild_cached().ok_or("Could not read guild")?;
+    let guild = guild_lock.read();
+
+    let channel_list: Vec<_> = guild.channels.values().map(|c| c.read()).collect();
+    let channel_name_list = channel_list.iter().map(|c| &c.name).join(", ");
+
+    let message = MessageBuilder::new()
+        .push_bold("Name: ")
+        .push_line(&guild.name)
+        .push_bold("Channels: ")
+        .push_line(channel_name_list)
+        .push_bold("Member count: ")
+        .push_line(guild.member_count);
+
+    void!(say(msg.channel_id, message));
 });
 
 pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFramework {
@@ -313,6 +333,11 @@ pub fn setup_admin(_client: &mut Client, frame: StandardFramework) -> StandardFr
                     "block_chan", |c| c
                         .cmd(block_chan_cmd)
                         .desc("Block a guild by a channel id.")
+                )
+                .command(
+                    "guild_info", |c| c
+                        .cmd(guild_info_cmd)
+                        .desc("Get info on a guild.")
                 )
     )
 }
