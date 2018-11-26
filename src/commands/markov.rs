@@ -336,7 +336,11 @@ command!(markov_enable(ctx, msg) {
         let message_count = if ::SPECIAL_GUILDS.contains(&msg.guild_id.unwrap().0) { 500_000 } else { 40_000 };
 
         let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64, message_count);
-        void!(say(msg.channel_id, format!("Build the markov chain with {} messages", count)));
+        if count == 0 {
+            void!(say(msg.channel_id, "No messages retrieved, probably no history permissions."));
+        } else {
+            void!(say(msg.channel_id, format!("Build the markov chain with {} messages.", count)));
+        }
     }
 });
 
@@ -360,7 +364,11 @@ command!(fill_markov(ctx, msg) {
     let message_count = if ::SPECIAL_GUILDS.contains(&msg.guild_id.unwrap().0) { 500_000 } else { 40_000 };
 
     let count = fill_messages(&ctx, msg.channel_id, msg.guild_id.unwrap().0 as i64, message_count);
-    void!(say(msg.channel_id, format!("Inserted {} messages into the chain.", count)));
+    if count == 0 {
+        void!(say(msg.channel_id, "No messages retrieved, probably no history permissions."));
+    } else {
+        void!(say(msg.channel_id, format!("Inserted {} messages into the chain.", count)));
+    }
 });
 
 
