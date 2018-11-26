@@ -128,8 +128,8 @@ impl Iterator for HistoryIterator {
                             return self.next();
                         }
                     }
-                    panic!(format!("Couldn't get messages: {:?}, aborting.", why))
-
+                    // any other error and we should just stop here
+                    return None;
                 },
             }
         }
