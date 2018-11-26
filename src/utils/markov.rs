@@ -77,11 +77,18 @@ impl<'a> MChain<'a> {
                 let sum: f64 = weights.iter().sum();
 
                 // welp
-                if sum == 0.0 {
+                if sum <= 0.1 || !sum.is_finite() {
                     break;
                 }
 
-                let wc = WeightedIndex::new(&weights).unwrap();
+                let wc = match WeightedIndex::new(&weights) {
+                    Ok(x)  => x,
+                    Err(e) => {
+                        error!(target:"bot", "Got error {} from weighted index init.", e);
+                        break;
+                    },
+                };
+
                 let next = choices[wc.sample(&mut rng)];
 
                 match next {
