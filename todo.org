@@ -8,3 +8,8 @@ maybe not?
 CLOSED: [2018-07-14 Sat 17:03]
 ** DONE [#B] Generic indexable pagination stuff for listing reminders/ aliases/ tags...
 CLOSED: [2018-09-02 Sun 23:44]
+** TODO Fix memory leak
+- Might be caused by the cache lock being taken and not released?
+- Might be timing related, appears when debugged but not elsewhere.
+** TODO Translate all context data unlocks into with-data calls                                    :memleak:
+- Hopefully will prevent deadlocks (assuming they're our problem)

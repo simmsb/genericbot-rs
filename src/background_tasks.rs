@@ -5,61 +5,75 @@ use models::Reminder;
 use serenity::{
     model::id::{ChannelId, UserId},
     prelude::*,
-    // utils,
-    utils::MessageBuilder,
+    utils,
+    utils::{shard_id, MessageBuilder},
 };
 use std::{
+    collections::HashMap,
     sync::{Once, ONCE_INIT},
     thread, time,
 };
+
 use PgConnectionManager;
 
-// static BOTLIST_UPDATE_START: Once = ONCE_INIT;
+static BOTLIST_UPDATE_START: Once = ONCE_INIT;
 static REMINDER_START: Once = ONCE_INIT;
 
 pub fn background_task(ctx: &Context) {
-    // BOTLIST_UPDATE_START.call_once(|| {
-    //     thread::spawn(move || {
-    //         info!(target: "bot", "Starting botlist updater process");
+    BOTLIST_UPDATE_START.call_once(|| {
+        thread::spawn(move || {
+            info!(target: "bot", "Starting botlist updater process");
 
-    //         let botlist_key = match dotenv::var("DISCORD_BOT_LIST_TOKEN") {
-    //             Ok(x) => x.to_owned(),
-    //             _ => {
-    //                 warn!(target: "bot", "No botlist token set");
-    //                 return;
-    //             }
-    //         };
+            let botlist_key = match dotenv::var("DISCORD_BOT_LIST_TOKEN") {
+                Ok(x) => x.to_owned(),
+                _ => {
+                    warn!(target: "bot", "No botlist token set");
+                    return;
+                }
+            };
 
-    //         let bot_id = log_time!(utils::with_cache(|c| c.user.id), "with_cache_lock: get bot id");
+            let bot_id = log_time!(utils::with_cache(|c| c.user.id), "with_cache_lock: get bot id");
 
-    //         let mut headers = reqwest::header::HeaderMap::new();
-    //         headers.insert(reqwest::header::AUTHORIZATION, botlist_key.parse().unwrap());
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(reqwest::header::AUTHORIZATION, botlist_key.parse().unwrap());
 
-    //         let client = reqwest::Client::builder()
-    //             .default_headers(headers)
-    //             .build()
-    //             .unwrap();
+            let client = reqwest::Client::builder()
+                .default_headers(headers)
+                .build()
+                .unwrap();
 
-    //         loop {
-    //             thread::sleep(time::Duration::from_secs(60 * 60)); // every hour
-    //             let guild_count = log_time!(utils::with_cache(|c| c.all_guilds().len()), "with_cache_lock: get guild len");
+            loop {
+                thread::sleep(time::Duration::from_secs(60 * 60)); // every hour
+                let (guild_counts, shard_count): (HashMap<_, u32>, _) = log_time!(utils::with_cache(|c| {
+                    let mut counts = HashMap::new();
 
-    //             info!(target: "bot", "Sent update to botlist, with count: {}", guild_count);
+                    for g_id in c.guilds.keys() {
+                        *counts.entry(shard_id(g_id.0, c.shard_count))
+                               .or_default() += 1;
+                    }
 
-    //             let resp = client
-    //                 .post(&format!(
-    //                     "https://bots.discord.pw/api/bots/{}/stats",
-    //                     bot_id
-    //                 ))
-    //                 .json(&json!({ "server_count": guild_count }))
-    //                 .send();
+                    (counts, c.shard_count)
+                }), "with_cache_lock: get guild len");
 
-    //             if let Ok(mut resp) = resp {
-    //                 info!(target: "bot", "Response from botlist. status: {}, body: {:?}", resp.status(), resp.text());
-    //             }
-    //         }
-    //     });
-    // });
+                for (shard_id, guild_count) in guild_counts {
+
+                    info!(target: "bot", "Sent update to botlist for shard: {}, with count: {}", shard_id, guild_count);
+
+                    let resp = client
+                        .post(&format!(
+                            "https://discord.bots.gg/api/bots/{}/stats",
+                            bot_id
+                        ))
+                        .json(&json!({ "serverCount": guild_count, "shardCount": shard_count, "shardId": shard_id }))
+                        .send();
+
+                    if let Ok(mut resp) = resp {
+                        info!(target: "bot", "Response from botlist. status: {}, body: {:?}", resp.status(), resp.text());
+                    }
+                }
+            }
+        });
+    });
 
     REMINDER_START.call_once(|| {
         use diesel;
