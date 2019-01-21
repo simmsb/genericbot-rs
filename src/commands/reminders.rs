@@ -15,6 +15,7 @@ use regex::Regex;
 use chrono::{NaiveDateTime, Utc, Datelike, Duration, NaiveDate};
 use utils::{
     say,
+    with_pool,
     pagination::{
         PaginationResult,
         Paginate,
@@ -205,26 +206,22 @@ fn insert_reminder(ctx: &Context, u_id: i64, c_id: i64, when: NaiveDateTime, now
         when: &when,
     };
 
-    let pool = extract_pool!(&ctx);
-
-    diesel::insert_into(reminder::table)
-        .values(&reminder)
-        .execute(pool)
-        .expect("Could not insert reminder");
+    with_pool(&ctx, |pool| diesel::insert_into(reminder::table)
+              .values(&reminder)
+              .execute(&pool)
+              .expect("Could not insert reminder"));
 }
 
 
 fn list_reminders(ctx: &Context, u_id: i64, page: i64) -> PaginationResult<(NaiveDateTime, String)> {
     use schema::reminder::dsl::*;
 
-    let pool = extract_pool!(&ctx);
-
-    reminder.filter(user_id.eq(u_id))
-        .order(when)
-        .select((when, text))
-        .paginate(page)
-        .load_and_count_pages(pool)
-        .unwrap()
+    with_pool(&ctx, |pool| reminder.filter(user_id.eq(u_id))
+              .order(when)
+              .select((when, text))
+              .paginate(page)
+              .load_and_count_pages(&pool)
+              .unwrap())
 }
 
 

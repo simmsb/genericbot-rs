@@ -21,6 +21,7 @@ extern crate failure;
 extern crate base64;
 extern crate chrono;
 extern crate dotenv;
+extern crate fern;
 extern crate itertools;
 extern crate lru_cache;
 extern crate procinfo;
@@ -34,30 +35,21 @@ extern crate systemstat;
 extern crate threadpool;
 extern crate typemap;
 extern crate whirlpool;
-extern crate fern;
 
 use serenity::{
     client::bridge::gateway::ShardManager,
     framework::{standard::StandardFramework, Framework},
-    model::{channel::Message,
-            gateway::Ready,
-            guild::Guild,
-            id::GuildId
-    },
+    model::{channel::Message, gateway::Ready, guild::Guild, id::GuildId},
     prelude::*,
 };
 
 use diesel::{pg::PgConnection, prelude::*, r2d2::ConnectionManager};
 
 use lru_cache::LruCache;
-use std::{
-    collections::HashSet,
-    os::unix::net::UnixStream,
-    sync::Arc
-};
+use std::{collections::HashSet, os::unix::net::UnixStream, sync::Arc};
 use threadpool::ThreadPool;
 use typemap::Key;
-use utils::say;
+use utils::{say, with_pool};
 
 struct Handler;
 
@@ -86,14 +78,12 @@ impl EventHandler for Handler {
 
         let g_id = match msg.guild_id {
             Some(id) => id,
-            None     => return,
+            None => return,
         };
 
         if !commands::markov::check_markov_state(&ctx, g_id) {
             return;
         }
-
-        let pool = extract_pool!(&ctx);
 
         let to_insert = NewStoredMessage {
             id: msg.id.0 as i64,
@@ -103,10 +93,12 @@ impl EventHandler for Handler {
             created_at: &msg.timestamp.naive_utc(),
         };
 
-        diesel::insert_into(message::table)
-            .values(&to_insert)
-            .execute(pool)
-            .expect("Couldn't insert message.");
+        with_pool(&ctx, |pool| {
+            diesel::insert_into(message::table)
+                .values(&to_insert)
+                .execute(&pool)
+                .expect("Couldn't insert message.")
+        });
     }
 
     fn guild_create(&self, ctx: Context, guild: Guild, _new: bool) {
@@ -114,15 +106,11 @@ impl EventHandler for Handler {
         use diesel::dsl::exists;
         use schema;
 
-        let guild_known: bool = {
-            let pool = extract_pool!(&ctx);
-
-            diesel::select(exists(
-                schema::guild::table
-                    .find(guild.id.0 as i64)))
-                .get_result(pool)
+        let guild_known: bool = with_pool(&ctx, |pool| {
+            diesel::select(exists(schema::guild::table.find(guild.id.0 as i64)))
+                .get_result(&pool)
                 .expect("Failed to check guild existence")
-        };
+        });
 
         if guild_known {
             trace!(target: "bot", "Joined already known guild: {}", guild.id);
@@ -133,28 +121,29 @@ impl EventHandler for Handler {
 
         ensure_guild(&ctx, guild.id);
 
-        let channel_ids: Vec<_> = guild.channels.values()
-                                                .map(|c| c.read().id.0 as i64)
-                                                .collect();
+        let channel_ids: Vec<_> = guild
+            .channels
+            .values()
+            .map(|c| c.read().id.0 as i64)
+            .collect();
 
-        {
-            let pool = extract_pool!(&ctx);
-
+        let is_blocked: bool = with_pool(&ctx, |pool| {
             use schema::blocked_guilds_channels::dsl::*;
-
-            let is_blocked: bool = diesel::select(exists(
+            diesel::select(exists(
                 blocked_guilds_channels.filter(
-                    guild_id.eq(guild.id.0 as i64)
-                        .or(channel_id.eq_any(&channel_ids)))))
-                .get_result(pool)
-                .expect("can't test if blocked");
+                    guild_id
+                        .eq(guild.id.0 as i64)
+                        .or(channel_id.eq_any(&channel_ids)),
+                ),
+            ))
+            .get_result(&pool)
+            .expect("can't test if blocked")
+        });
 
-            if is_blocked {
-                info!(target: "bot", "Leaving blocked guild: {}", guild.name);
-                void!(guild.leave());
-            }
+        if is_blocked {
+            info!(target: "bot", "Leaving blocked guild: {}", guild.name);
+            void!(guild.leave());
         }
-
     }
 
     fn resume(&self, _ctx: Context, evt: serenity::model::event::ResumedEvent) {
@@ -174,7 +163,13 @@ fn ensure_guild(ctx: &Context, g_id: GuildId) {
     use models::{NewGuild, NewPrefix};
     use schema;
 
-    let pool = &*ctx.data.lock().get::<PgConnectionManager>().unwrap().get().unwrap();
+    let pool = &*ctx
+        .data
+        .lock()
+        .get::<PgConnectionManager>()
+        .unwrap()
+        .get()
+        .unwrap();
 
     let new_guild = NewGuild { id: g_id.0 as i64 };
 
@@ -301,7 +296,6 @@ fn get_prefixes(ctx: &mut Context, m: &Message) -> Option<Arc<RwLock<Vec<String>
     }
 }
 
-
 /// Process possible tag activations
 fn process_tag(ctx: &mut Context, msg: &Message, cmd_name: &str) {
     use schema::guild::dsl::*;
@@ -309,29 +303,28 @@ fn process_tag(ctx: &mut Context, msg: &Message, cmd_name: &str) {
 
     let g_id = match msg.guild_id {
         Some(x) => x.0 as i64,
-        None    => return,
+        None => return,
     };
 
-    let pool = extract_pool!(&ctx);
-
-    let has_auto_tags = guild
-        .find(g_id)
-        .select(tag_prefix_on)
-        .first(pool)
-        .unwrap_or(false);
-
+    let has_auto_tags = with_pool(&ctx, |pool| {
+        guild
+            .find(g_id)
+            .select(tag_prefix_on)
+            .first(&pool)
+            .unwrap_or(false)
+    });
 
     if has_auto_tags {
-        if let Ok(r_tag) = tag
-            .filter(guild_id.eq(g_id))
-            .filter(key.eq(cmd_name))
-            .select(text)
-            .first::<String>(pool) {
-                void!(say(msg.channel_id, r_tag));
-            }
+        if let Ok(r_tag) = with_pool(&ctx, |pool| {
+            tag.filter(guild_id.eq(g_id))
+                .filter(key.eq(cmd_name))
+                .select(text)
+                .first::<String>(&pool)
+        }) {
+            void!(say(msg.channel_id, r_tag));
+        }
     }
 }
-
 
 /// Process possible alias activations
 fn process_alias(ctx: &mut Context, msg: &Message, cmd_name: &str) {
@@ -355,7 +348,6 @@ fn process_alias(ctx: &mut Context, msg: &Message, cmd_name: &str) {
         };
     }
 }
-
 
 // Our setup stuff
 fn setup(client: &mut Client, frame: StandardFramework) -> StandardFramework {
@@ -440,12 +432,10 @@ pub fn log_message(msg: &str) {
     void!(say(chan_id, msg));
 }
 
-
 /// Guilds that are special to me
 lazy_static! {
     static ref SPECIAL_GUILDS: HashSet<u64> = [189458076842196992u64].iter().cloned().collect();
 }
-
 
 fn setup_logger() -> Result<(), fern::InitError> {
     fern::Dispatch::new()
@@ -462,13 +452,15 @@ fn setup_logger() -> Result<(), fern::InitError> {
                 .level(log::LevelFilter::Info)
                 .level_for("serenity", log::LevelFilter::Debug)
                 .level_for("bot", log::LevelFilter::Debug)
-                .chain(std::io::stdout())
+                .chain(std::io::stdout()),
         )
         .chain(
             fern::Dispatch::new()
                 .level(log::LevelFilter::Error)
                 .level_for("bot", log::LevelFilter::Info)
-                .chain(fern::Output::call(|record| log_message(&format!("{}", record.args()))))
+                .chain(fern::Output::call(|record| {
+                    log_message(&format!("{}", record.args()))
+                })),
         )
         .apply()?;
     Ok(())

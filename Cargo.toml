@@ -22,7 +22,7 @@ lru-cache = "0.1.1"
 threadpool = "1.7.1"
 log = "0.4.6"
 rmp-serde = "0.13.7"
-serde = "1.0.82"
+serde = "1.0.83"
 failure = "0.1.3"
 fern = "0.5.7"
 

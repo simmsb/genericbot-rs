@@ -10,9 +10,8 @@ use serenity::{
 };
 use std::num::Wrapping;
 use std::time;
-use utils::{and_comma_split, say, send_message, try_resolve_user};
+use utils::{and_comma_split, say, send_message, try_resolve_user, with_pool};
 use whirlpool::{Digest, Whirlpool};
-use PgConnectionManager;
 
 fn process_usage() -> f64 {
     use std::thread;
@@ -194,33 +193,31 @@ fn increment_tea_count(ctx: &Context, u_id: i64) -> i32 {
     use models::NewTeaCount;
     use schema::tea_count::dsl::*;
 
-    let pool = extract_pool!(&ctx);
-
     let to_insert = NewTeaCount {
         user_id: u_id,
         count: 1,
     };
 
-    diesel::insert_into(tea_count)
-        .values(&to_insert)
-        .on_conflict(user_id)
-        .do_update()
-        .set(count.eq(count + 1))
-        .returning(count)
-        .get_result(pool)
-        .expect("Failed to update tea count.")
+    with_pool(&ctx, |pool|
+              diesel::insert_into(tea_count)
+              .values(&to_insert)
+              .on_conflict(user_id)
+              .do_update()
+              .set(count.eq(count + 1))
+              .returning(count)
+              .get_result(&pool)
+              .expect("Failed to update tea count."))
 }
 
 fn get_tea_count(ctx: &Context, u_id: i64) -> i32 {
     use schema::tea_count::dsl::*;
 
-    let pool = extract_pool!(&ctx);
-
-    tea_count
-        .find(u_id)
-        .select(count)
-        .first(pool)
-        .unwrap_or(0)
+    with_pool(&ctx, |pool|
+              tea_count
+              .find(u_id)
+              .select(count)
+              .first(&pool)
+              .unwrap_or(0))
 }
 
 command!(tea_plus_plus_cmd(ctx, msg) {

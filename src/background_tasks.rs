@@ -61,14 +61,17 @@ pub fn background_task(ctx: &Context) {
 
                     let resp = client
                         .post(&format!(
-                            "https://discord.bots.gg/api/bots/{}/stats",
+                            "https://discord.bots.gg/api/v1/bots/{}/stats",
                             bot_id
                         ))
-                        .json(&json!({ "serverCount": guild_count, "shardCount": shard_count, "shardId": shard_id }))
+                        .json(&json!({ "guildCount": guild_count,
+                                       "shardCount": shard_count,
+                                       "shardId":    shard_id
+                        }))
                         .send();
 
                     if let Ok(mut resp) = resp {
-                        info!(target: "bot", "Response from botlist. status: {}, body: {:?}", resp.status(), resp.text());
+                        info!(target: "bot", "Response from botlist for shard {}. status: {}, body: {:?}", shard_id, resp.status(), resp.text());
                     }
                 }
             }

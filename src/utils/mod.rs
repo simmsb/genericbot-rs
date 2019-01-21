@@ -1,52 +1,54 @@
+use diesel::{r2d2::{PooledConnection, ConnectionManager}, PgConnection};
+use itertools::Itertools;
+use rand::{seq::SliceRandom, thread_rng};
+use serde_json;
+use serenity;
 use serenity::{
-    prelude::*,
+    builder::CreateMessage,
+    framework::standard::{Args, CommandOptions},
     model::{
-        id::{GuildId, UserId, MessageId, ChannelId},
         channel::Message,
         guild::Member,
+        id::{ChannelId, GuildId, MessageId, UserId},
     },
-    framework::standard::{
-        Args,
-        CommandOptions,
-    },
-    builder::CreateMessage,
+    prelude::*,
     utils::with_cache,
 };
-use serenity;
 use std::fmt::Display;
-use serde_json;
-use itertools::Itertools;
-use rand::{thread_rng, seq::SliceRandom};
 
 #[macro_use]
 pub mod macros;
 pub mod markov;
 pub mod pagination;
 
-
 pub fn names_for_members<U, G>(u_ids: &[U], g_id: G) -> Vec<String>
-    where U: Into<UserId> + Copy,
-          G: Into<GuildId> + Copy,
+where
+    U: Into<UserId> + Copy,
+    G: Into<GuildId> + Copy,
 {
     fn backup_getter(u_id: impl Into<UserId> + Copy) -> String {
         match u_id.into().to_user() {
             Ok(u) => u.name,
-            _     => u_id.into().to_string(),
+            _ => u_id.into().to_string(),
         }
     }
 
-    log_time!(with_cache(
-        |cache| cache.guild(g_id).map(|g| {
+    log_time!(
+        with_cache(|cache| cache.guild(g_id).map(|g| {
             let members = &g.read().members;
-            u_ids.iter().map(
-                |&id| members.get(&id.into()).map_or_else(
-                    || backup_getter(id),
-                    |m| m.display_name().to_string()))
-                           .collect()
-        })).unwrap_or_else(|| u_ids.iter().map(|&id| backup_getter(id)).collect()),
-              "with_cache: find_members")
+            u_ids
+                .iter()
+                .map(|&id| {
+                    members
+                        .get(&id.into())
+                        .map_or_else(|| backup_getter(id), |m| m.display_name().to_string())
+                })
+                .collect()
+        }))
+        .unwrap_or_else(|| u_ids.iter().map(|&id| backup_getter(id)).collect()),
+        "with_cache: find_members"
+    )
 }
-
 
 pub fn and_comma_split<T: AsRef<str>>(m: &[T]) -> String {
     let len = m.len();
@@ -61,23 +63,27 @@ pub fn and_comma_split<T: AsRef<str>>(m: &[T]) -> String {
             res.push_str(" and ");
             res.push_str(m[len - 1].as_ref());
             res
-        },
+        }
     }
 }
-
 
 pub fn insert_missing_guilds(ctx: &Context) {
     use diesel;
     use diesel::prelude::*;
     use models::NewGuild;
     use schema::guild;
-    use ::PgConnectionManager;
+    use PgConnectionManager;
 
     let pool = extract_pool!(&ctx);
 
-    let guilds: Vec<_> = log_time!(with_cache(|c| c.all_guilds().iter().map(
-        |&g| NewGuild { id: g.0 as i64 }
-    ).collect()), "with_cache: find_new_guilds");
+    let guilds: Vec<_> = log_time!(
+        with_cache(|c| c
+            .all_guilds()
+            .iter()
+            .map(|&g| NewGuild { id: g.0 as i64 })
+            .collect()),
+        "with_cache: find_new_guilds"
+    );
 
     diesel::insert_into(guild::table)
         .values(&guilds)
@@ -86,32 +92,32 @@ pub fn insert_missing_guilds(ctx: &Context) {
         .expect("Error building any missing guilds.");
 }
 
-
 pub struct HistoryIterator {
     last_id: Option<MessageId>,
     channel: ChannelId,
     message_vec: Vec<Message>,
 }
 
-
 /// An iterator over discord messages, runs forever through all the messages in a channel's history
 impl HistoryIterator {
     pub fn new(c_id: ChannelId) -> Self {
-        HistoryIterator { last_id: None, channel: c_id, message_vec: Vec::new() }
+        HistoryIterator {
+            last_id: None,
+            channel: c_id,
+            message_vec: Vec::new(),
+        }
     }
 }
-
 
 impl Iterator for HistoryIterator {
     type Item = Message;
     fn next(&mut self) -> Option<Message> {
         // no messages, get some more
         if self.message_vec.is_empty() {
-            match self.channel.messages(
-                |g| match self.last_id {
-                    Some(id) => g.before(id),
-                    None     => g
-                }) {
+            match self.channel.messages(|g| match self.last_id {
+                Some(id) => g.before(id),
+                None => g,
+            }) {
                 Ok(messages) => {
                     if messages.is_empty() {
                         // no more messages to get, end iterator here
@@ -119,7 +125,7 @@ impl Iterator for HistoryIterator {
                     }
                     self.message_vec.extend(messages);
                     self.last_id = self.message_vec.last().map(|m| m.id);
-                },
+                }
                 Err(why) => {
                     if let serenity::Error::Http(HttpError::UnsuccessfulRequest(ref resp)) = why {
                         if resp.status.is_server_error() {
@@ -130,7 +136,7 @@ impl Iterator for HistoryIterator {
                     }
                     // any other error and we should just stop here
                     return None;
-                },
+                }
             }
         }
 
@@ -146,7 +152,6 @@ impl Iterator for HistoryIterator {
     }
 }
 
-
 pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
     if let Some(g) = g_id.to_guild_cached() {
         let guild = g.read();
@@ -161,23 +166,32 @@ pub fn try_resolve_user(s: &str, g_id: GuildId) -> Result<Member, ()> {
     }
 }
 
-
-pub fn nsfw_check(_: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions) -> Result<(), String> {
-    if msg.channel_id.to_channel_cached().map_or(false, |c| c.is_nsfw()) {
+pub fn nsfw_check(
+    _: &mut Context,
+    msg: &Message,
+    _: &mut Args,
+    _: &CommandOptions,
+) -> Result<(), String> {
+    if msg
+        .channel_id
+        .to_channel_cached()
+        .map_or(false, |c| c.is_nsfw())
+    {
         Ok(())
     } else {
         Err("Channel is not NSFW".to_owned())
     }
-
 }
 
 #[must_use]
 pub fn send_message<F, C: Into<ChannelId> + Copy>(chan_id: C, f: F) -> serenity::Result<()>
-    where F: FnOnce(CreateMessage) -> CreateMessage {
-    use ::{MESSENGER_SOCKET, connect_socket};
-    use serde::Serialize;
+where
+    F: FnOnce(CreateMessage) -> CreateMessage,
+{
     use rmp_serde::Serializer;
+    use serde::Serialize;
     use std::io::Write;
+    use {connect_socket, MESSENGER_SOCKET};
 
     let msg = f(CreateMessage::default());
     let map = serenity::utils::vecmap_to_json_map(msg.0);
@@ -190,7 +204,9 @@ pub fn send_message<F, C: Into<ChannelId> + Copy>(chan_id: C, f: F) -> serenity:
 
     let mut buf = Vec::new();
 
-    (chan_id.into(), content).serialize(&mut Serializer::new(&mut buf)).unwrap();
+    (chan_id.into(), content)
+        .serialize(&mut Serializer::new(&mut buf))
+        .unwrap();
 
     let use_fallback = {
         let mut socket = MESSENGER_SOCKET.lock();
@@ -201,7 +217,7 @@ pub fn send_message<F, C: Into<ChannelId> + Copy>(chan_id: C, f: F) -> serenity:
 
         match socket.as_mut() {
             Some(skt) => skt.write_all(buf.as_slice()).is_err(),
-            _         => true,
+            _ => true,
         }
     };
 
@@ -219,27 +235,25 @@ pub fn say<D: Display, C: Into<ChannelId> + Copy>(chan_id: C, content: D) -> ser
     send_message(chan_id.into(), |m| m.content(content))
 }
 
-
 pub fn get_random_members(guild_id: GuildId) -> Option<Vec<Member>> {
     guild_id.to_guild_cached().and_then(|g| {
         let guild = g.read();
-        let member_ids: Vec<_> =
-            guild.members
-                 .keys()
-                 .filter(|u| // no bots thanks
+        let member_ids: Vec<_> = guild
+            .members
+            .keys()
+            .filter(|u| // no bots thanks
                          match u.to_user_cached() {
                              Some(user) => !user.read().bot,
                              None       => false,
-                         }
-                 )
-                 .collect();
+                         })
+            .collect();
         let &&member_id = member_ids.choose(&mut thread_rng())?;
         guild.member(member_id).ok().map(|m| vec![m.clone()])
     })
 }
 
 // Stolen from serenity source
-fn normalize(text: &str) -> String {
+pub fn normalize(text: &str) -> String {
     // Remove invite links and popular scam websites, mostly to prevent the
     // current user from triggering various ad detectors and prevent embeds.
     text.replace("discord.gg", "discord\u{2024}gg")
@@ -258,4 +272,19 @@ fn normalize(text: &str) -> String {
         // because it utilises it itself.
         .replace("@everyone", "@\u{200B}everyone")
         .replace("@here", "@\u{200B}here")
+}
+
+pub fn with_pool<T, F>(ctx: &Context, f: F) -> T
+where
+    F: Fn(PooledConnection<ConnectionManager<PgConnection>>) -> T,
+{
+    let pool = ctx
+        .data
+        .lock()
+        .get::<super::PgConnectionManager>()
+        .unwrap()
+        .get()
+        .unwrap();
+
+    f(pool)
 }
