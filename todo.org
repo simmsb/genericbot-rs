@@ -1,6 +1,6 @@
-#+TITLE: genericbot todolist
+#+TITLE: Genericbot todolist
 
-* genericbot Tasks
+* Genericbot Tasks
 ** CANCELLED [#C] Markov chains for non-members that have left
 CLOSED: [2018-09-09 Sun 19:42]
 maybe not?

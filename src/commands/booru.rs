@@ -37,7 +37,7 @@ impl Key for BooruClient {
 impl BooruClient {
     fn generate() -> reqwest::Client {
         let mut headers = header::HeaderMap::new();
-        headers.insert(header::USER_AGENT, "genericBot Discord Bot: https://github.com/nitros12/genericbot-rs".parse().unwrap());
+        headers.insert(header::USER_AGENT, "GenericBot Discord Bot: https://github.com/nitros12/genericbot-rs".parse().unwrap());
         reqwest::Client::builder()
             .default_headers(headers)
             .build()
@@ -391,49 +391,6 @@ booru_def!(
 );
 
 
-booru_def!(
-    booru: genericBooru,
-    cmd_name: genericbooru_cmd,
-    base: "https://genericbooru.moe",
-    ext: "/post/index.json",
-    thumb: None,
-    url_key: "file_url",
-    tag_key: "tags",
-    page_path: "post/show/",
-
-    {
-        fn params(ctx: &BooruContext) -> Vec<(&'static str, String)> {
-            vec![("tags", ctx.tags.iter().chain(&["-rating:e".to_owned()]).join(" "))]
-        }
-
-        fn parse_response(val: &str) -> Result<Vec<Value>, Error> {
-            let mut parsed: Vec<Value> = serde_json::from_str(val).map_err(|_| BooruError::InvalidResponse)?;
-
-            for mut elem in &mut parsed {
-
-                let mut ext = elem[Self::URL_KEY].as_str()
-                                                 .ok_or(BooruError::InvalidResponse)?
-                                                 .chars()
-                                                 .rev()
-                                                 .take(3)
-                                                 .collect::<Vec<_>>();
-                ext.reverse();
-
-                let ext = ext.into_iter().collect::<String>();
-
-                let fixed = json!(format!("{}/image/{}.{}",
-                                          Self::BASE_URL,
-                                          elem["md5"].as_str().ok_or(BooruError::InvalidResponse)?,
-                                          ext));
-
-                elem["file_url"] = fixed;
-            }
-            Ok(parsed)
-        }
-    }
-);
-
-
 command!(ninja_cmd(ctx, msg, args) {
     let client = {
         let lock = ctx.data.lock();
@@ -487,7 +444,6 @@ command!(booru_bomb(ctx, msg, args) {
     run_booru!(GelBooru);
     run_booru!(SafeBooru);
     run_booru!(Yandere);
-    run_booru!(genericBooru);
 });
 
 

@@ -1,4 +1,4 @@
-# genericbot
+# Genericbot
 
 [![Add bot](https://img.shields.io/badge/add-bot-6389c6.svg)](https://discordapp.com/oauth2/authorize?client_id=226409882960658432&scope=bot&permissions=0)
 [![Help Guild](https://img.shields.io/discord/277242136624234498.svg)](https://discord.gg/aV6zGnn)

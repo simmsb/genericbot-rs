@@ -62,7 +62,7 @@ command!(status_cmd(ctx, msg) {
     send_message(msg.channel_id,
         |m| m.embed(
             |e| e
-                .title("genericbot stats")
+                .title("Genericbot stats")
                 .colour(0x2C78C8)
                 .field("Uptime", uptime_str, true)
                 .field("Guild count", g_c, true)
