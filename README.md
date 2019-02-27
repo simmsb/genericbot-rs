@@ -13,7 +13,7 @@ Help output:
 Commands:
 
 Aliases: add_alias delete_alias list_aliases
-Booru: booru booru_bomb danbooru e621 e926 gelbooru genericbooru safebooru yandere
+Booru: booru booru_bomb danbooru e621 e926 gelbooru safebooru yandere
 GImage: gimage
 Markov: fill_markov markov markov_all markov_disable markov_enable
 Misc: hug kiss message_owner ping q rate slap stats

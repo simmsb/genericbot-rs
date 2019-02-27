@@ -494,12 +494,6 @@ pub fn setup_booru(client: &mut Client, frame: StandardFramework) -> StandardFra
                         .check(nsfw_check)
                         .batch_known_as(&["yan"])
                )
-               .command("genericbooru", |c| c
-                        .cmd(genericbooru_cmd)
-                        .desc("Search genericbooru for images.")
-                        .check(nsfw_check)
-                        .batch_known_as(&["generic"])
-               )
                .command("booru_bomb", |c| c
                         .cmd(booru_bomb)
                         .desc("Search each booru for an image.")
